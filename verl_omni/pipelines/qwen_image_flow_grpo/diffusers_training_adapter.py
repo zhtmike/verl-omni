@@ -198,6 +198,13 @@ class QwenImage(DiffusionModelBase):
         reversed-sampling.  Applies True-CFG guidance when
         ``model_config.true_cfg_scale > 1.0``.
 
+        When ``model_config.enable_gradient_checkpointing`` is ``True`` and
+        gradients are enabled, the unconditional (negative) CFG forward pass is
+        wrapped in :func:`torch.utils.checkpoint.checkpoint` so its intermediate
+        activations are not stored — they are recomputed during backward instead.
+        This halves the peak activation memory introduced by CFG at the cost of
+        one extra forward pass during backward.
+
         Args:
             module (QwenImageTransformer2DModel): The Qwen-Image transformer module.
             scheduler (FlowMatchSDEDiscreteScheduler): Scheduler used to sample
@@ -223,7 +230,31 @@ class QwenImage(DiffusionModelBase):
         true_cfg_scale = model_config.pipeline.true_cfg_scale
         if true_cfg_scale > 1.0:
             assert negative_model_inputs is not None
-            neg_noise_pred = module(**negative_model_inputs)[0]
+            if torch.is_grad_enabled() and model_config.enable_gradient_checkpointing:
+                # Gradient-checkpoint the unconditional (negative) CFG forward pass to
+                # avoid retaining a second set of activations alongside the conditional
+                # pass during backward.  This mirrors the per-block
+                # `_gradient_checkpointing_func` used inside the diffusers transformer,
+                # applied here at the whole-pass level.
+                #
+                # Tensor inputs are forwarded positionally so that autograd can track
+                # them; non-tensor metadata (img_shapes, return_dict, …) is captured
+                # in the closure.
+                tensor_keys = [k for k, v in negative_model_inputs.items() if isinstance(v, torch.Tensor)]
+                non_tensor_kw = {k: v for k, v in negative_model_inputs.items() if not isinstance(v, torch.Tensor)}
+
+                def _neg_forward(*tensor_vals):
+                    kw = dict(zip(tensor_keys, tensor_vals, strict=False))
+                    kw.update(non_tensor_kw)
+                    return module(**kw)[0]
+
+                neg_noise_pred = torch.utils.checkpoint.checkpoint(
+                    _neg_forward,
+                    *[negative_model_inputs[k] for k in tensor_keys],
+                    use_reentrant=False,
+                )
+            else:
+                neg_noise_pred = module(**negative_model_inputs)[0]
             noise_pred = apply_true_cfg(noise_pred, neg_noise_pred, true_cfg_scale)
 
         _, log_prob, prev_sample_mean, std_dev_t = scheduler.sample_previous_step(
