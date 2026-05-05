@@ -24,12 +24,13 @@ from verl.single_controller.ray import RayClassWithInitArgs, RayResourcePool, Ra
 from verl.utils import tensordict_utils as tu
 from verl.workers.config import TrainingWorkerConfig
 
-from tests.gpu_smoke.gpu_test_topology import resolve_requested_num_gpus
 from verl_omni.pipelines.utils import build_scheduler
 from verl_omni.workers.config import DiffusionModelConfig, FSDPDiffusionActorConfig
 from verl_omni.workers.engine_workers import TrainingWorker
 from verl_omni.workers.utils.losses import diffusion_loss
 from verl_omni.workers.utils.padding import embeds_padding_2_no_padding
+
+from ..utils.gpu_test_topology import resolve_requested_num_gpus
 
 
 def create_training_config(model_type, strategy, device_count, model):

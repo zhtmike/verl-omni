@@ -23,8 +23,9 @@ from verl.experimental.agent_loop.agent_loop import AgentLoopManager
 from verl.protocol import DataProto
 from verl.workers.rollout.llm_server import LLMServerManager
 
-from tests.gpu_smoke.gpu_test_topology import resolve_diffusion_gpu_topology
 from verl_omni.agent_loop import DiffusionAgentLoopWorker
+
+from ..utils.gpu_test_topology import resolve_diffusion_agent_loop_gpu_topology
 
 
 def _create_tp_compatible_model(parent_dir, src_model_path, num_attention_heads=2):
@@ -63,7 +64,7 @@ def init_config() -> DictConfig:
     with initialize_config_dir(config_dir=os.path.abspath("verl_omni/trainer/config")):
         config = compose(config_name="diffusion_trainer")
 
-    requested_gpus, tp_size, attention_heads = resolve_diffusion_gpu_topology()
+    requested_gpus, tp_size, attention_heads = resolve_diffusion_agent_loop_gpu_topology()
     base_model_path = os.path.expanduser("~/models/tiny-random/Qwen-Image")
     with tempfile.TemporaryDirectory() as tmp_dir:
         model_path = _create_tp_compatible_model(tmp_dir, base_model_path, num_attention_heads=attention_heads)

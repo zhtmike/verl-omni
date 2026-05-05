@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/gpu_smoke/run_gpu_smoke_tests.sh (offline version, to be dropped when online GPU test is available)
+# tests/gpu_smoke/run_gpu_smoke_tests.sh
 #
 # Offline GPU smoke-test suite for verl-omni.
 # Runs a curated set of GPU-dependent tests and produces a structured
@@ -10,7 +10,7 @@
 #
 #   With no arguments, runs all enabled tests.
 #   Pass specific test IDs to run only those:
-#     bash tests/gpu_smoke/run_gpu_smoke_tests.sh 0 3 6
+#     bash tests/gpu_smoke/run_gpu_smoke_tests.sh 0 3 4
 #   Select GPU count (allowed: 1, 2, 4, 8):
 #     bash tests/gpu_smoke/run_gpu_smoke_tests.sh --num-gpus 2
 #

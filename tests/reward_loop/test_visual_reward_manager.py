@@ -21,7 +21,7 @@ from verl.experimental.reward_loop import RewardLoopManager
 from verl.protocol import DataProto
 from verl.utils import hf_tokenizer
 
-from tests.gpu_smoke.gpu_test_topology import resolve_reward_model_gpu_topology
+from ..utils.gpu_test_topology import resolve_reward_loop_gpu_topology
 
 
 def create_data_samples(tokenizer, data_source="ocr") -> DataProto:
@@ -71,7 +71,7 @@ def test_reward_model_genrm():
 
     rollout_model_name = os.path.expanduser("~/models/tiny-random/Qwen-Image")
     reward_model_name = os.path.expanduser("~/models/tiny-random/qwen3-vl")
-    reward_model_gpus, tp_size = resolve_reward_model_gpu_topology()
+    reward_model_gpus, tp_size = resolve_reward_loop_gpu_topology()
 
     config.actor_rollout_ref.model.path = rollout_model_name
     config.actor_rollout_ref.model.tokenizer_path = os.path.join(rollout_model_name, "tokenizer")
