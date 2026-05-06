@@ -108,6 +108,30 @@ the rollout section is the main place to override sampling behavior.
 - `actor_rollout_ref.model.tokenizer_path`: Optional tokenizer path if it is
   not located under the model path.
 
+#### Sequence parallelism (Ulysses SP)
+
+Ulysses SP is supported for diffusion model training and requires diffusers >= 0.38.0.
+It shards the sequence (latent + text) dimension across GPUs within a SP group,
+reducing per-GPU memory for long-sequence and high-resolution training.
+
+- `actor_rollout_ref.actor.fsdp_config.ulysses_sequence_parallel_size`: Number
+  of GPUs in the SP group. Must be a divisor of the total GPU count. Set to `1`
+  (default) to disable SP. Common values: `2`, `4`.
+
+When SP is enabled, FSDP data parallelism is automatically reduced:
+```
+dp_size = total_gpus / ulysses_sequence_parallel_size
+```
+
+For SP training, `num_attention_heads` must be divisible by
+`ulysses_sequence_parallel_size`, and the text embedding sequence length is
+automatically padded to the nearest multiple.
+
+A ready-to-use 4-GPU SP=2 example is provided:
+```bash
+bash examples/flowgrpo_trainer/run_qwen_image_ocr_lora_sp2.sh
+```
+
 #### Batch size
 
 FlowGRPO uses three nested batch-size parameters that operate at different
