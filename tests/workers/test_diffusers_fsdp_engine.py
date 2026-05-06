@@ -35,6 +35,14 @@ from verl_omni.workers.utils.padding import embeds_padding_2_no_padding
 from ..utils.gpu_test_topology import resolve_requested_num_gpus
 
 
+def _diffusers_sp_supported() -> bool:
+    """Return True if the installed diffusers version supports ContextParallelConfig (>= 0.38.0)."""
+    import diffusers
+    from packaging import version
+
+    return version.parse(diffusers.__version__) >= version.parse("0.38.0")
+
+
 def _create_sp_compatible_model(parent_dir, src_model_path, num_attention_heads=2):
     """Create a temporary Qwen-Image model copy compatible with SP."""
     from diffusers import QwenImageTransformer2DModel
@@ -61,7 +69,7 @@ def create_training_config(model_type, strategy, device_count, model):
     if device_count == 1:
         cp = fsdp_size = 1
     else:
-        cp = 2
+        cp = 2 if _diffusers_sp_supported() else 1
         fsdp_size = device_count
     path = os.path.expanduser(model)
     tokenizer_path = os.path.join(path, "tokenizer")
@@ -177,8 +185,9 @@ def test_diffusers_fsdp_engine(strategy):
         if device_count > 1 and device_count % 2 != 0:
             pytest.skip(f"Need even GPU count for cp=2/fsdp_size=device_count test, got {device_count}")
 
+        sp_enabled = device_count > 1 and _diffusers_sp_supported()
         base_model_path = os.path.expanduser("~/models/tiny-random/Qwen-Image")
-        if device_count > 1:
+        if sp_enabled:
             # SP requires num_attention_heads divisible by sp_size (cp=2).
             model_path = _create_sp_compatible_model(tmp_dir, base_model_path, num_attention_heads=2)
         else:
