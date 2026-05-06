@@ -175,7 +175,7 @@ def test_diffusers_fsdp_engine(strategy):
         visible_gpus = torch.cuda.device_count()
         device_count = resolve_requested_num_gpus(default_num_gpus=max(1, visible_gpus))
         if device_count > 1 and device_count % 2 != 0:
-            pytest.skip(f"Need even GPU count for cp=2/fsdp_size=2 test, got {device_count}")
+            pytest.skip(f"Need even GPU count for cp=2/fsdp_size=device_count test, got {device_count}")
 
         base_model_path = os.path.expanduser("~/models/tiny-random/Qwen-Image")
         if device_count > 1:
