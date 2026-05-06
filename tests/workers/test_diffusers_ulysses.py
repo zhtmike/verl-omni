@@ -24,7 +24,7 @@ import os
 import pytest
 import torch
 import torch.distributed
-from torch.distributed import init_device_mesh
+from torch.distributed.device_mesh import init_device_mesh
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 from torch.distributed.fsdp import MixedPrecision, ShardingStrategy
 from verl.utils.device import get_device_name, get_torch_device
