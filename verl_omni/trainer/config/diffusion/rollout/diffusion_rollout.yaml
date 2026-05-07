@@ -166,7 +166,7 @@ algo:
   # SDE variant: "sde" or "cps"
   sde_type: sde
 
-  # Length of the active SDE window (a.k.a. MixGRPO "group size"); null = all steps
+  # Length of the active SDE window; null = all steps
   sde_window_size: null
 
   # [lo, hi] envelope of valid window-start positions. For flow_grpo the rollout
