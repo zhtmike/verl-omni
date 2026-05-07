@@ -57,10 +57,7 @@ from verl_omni.trainer.diffusion.diffusion_metric_utils import (
     compute_throughput_metrics_diffusion,
     compute_timing_metrics_diffusion,
 )
-from verl_omni.trainer.diffusion.sde_window_scheduler import (
-    SDEWindowScheduler,
-    build_sde_window_scheduler,
-)
+from verl_omni.trainer.diffusion.sde_window_scheduler import SDEWindowScheduler
 from verl_omni.workers.utils.padding import embeds_padding_2_no_padding
 
 
@@ -185,19 +182,21 @@ class RayFlowGRPOTrainer:
 
         self.checkpoint_manager = None
 
-        # Trainer-side SDE-window scheduler. Defaults to FlowGRPO behaviour
-        self.sde_window_scheduler: SDEWindowScheduler = self._build_sde_window_scheduler()
+        # Trainer-side SDE-window scheduler. Built dynamically based on the algorithm and model.
+        from verl_omni.pipelines.model_base import DiffusionModelBase
+        from verl_omni.workers.config.diffusion.model import DiffusionModelConfig
+        from verl_omni.workers.config.diffusion.rollout import DiffusionRolloutAlgoConfig, DiffusionPipelineConfig
+        
+        # Convert model config to dataclass to auto-detect architecture
+        model_cfg_dc = omega_conf_to_dataclass(self.config.actor_rollout_ref.model, DiffusionModelConfig)
+        # Inject the rollout's algorithm and pipeline config so the builder can see them
+        model_cfg_dc.algo = omega_conf_to_dataclass(self.config.actor_rollout_ref.rollout.algo, DiffusionRolloutAlgoConfig)
+        model_cfg_dc.pipeline = omega_conf_to_dataclass(self.config.actor_rollout_ref.rollout.pipeline, DiffusionPipelineConfig)
 
-    def _build_sde_window_scheduler(self) -> SDEWindowScheduler:
-        """Construct the SDE-window scheduler from the rollout algo config."""
-        from verl_omni.workers.config.diffusion.rollout import DiffusionRolloutAlgoConfig
-
-        rollout_cfg = self.config.actor_rollout_ref.rollout
-        algo_dc = omega_conf_to_dataclass(rollout_cfg.algo, DiffusionRolloutAlgoConfig)
-        num_inference_steps = int(rollout_cfg.pipeline.num_inference_steps)
-        scheduler = build_sde_window_scheduler(algo_dc, num_inference_steps=num_inference_steps)
-        print(f"[diffusion-trainer] SDE-window scheduler: {type(scheduler).__name__}")
-        return scheduler
+        self.sde_window_scheduler = DiffusionModelBase.get_class(
+            model_cfg_dc
+        ).build_algo_scheduler(model_cfg_dc)
+        print(f"[diffusion-trainer] SDE-window scheduler: {type(self.sde_window_scheduler).__name__}")
 
     def _create_dataloader(self, train_dataset, val_dataset, collate_fn, train_sampler: Optional[Sampler]):
         """

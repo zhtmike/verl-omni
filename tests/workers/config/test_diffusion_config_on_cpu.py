@@ -87,17 +87,6 @@ class TestDiffusionRolloutAlgoConfig:
         with pytest.raises(ValueError, match="sde_window_size"):
             DiffusionRolloutAlgoConfig(algo_type="mix_grpo", sde_window_size=None)
 
-    def test_to_rollout_dict_excludes_trainer_fields(self):
-        cfg = DiffusionRolloutAlgoConfig(
-            algo_type="mix_grpo", sde_window_size=4, sample_strategy="random", sde_window_seed=42
-        )
-        d = cfg.to_rollout_dict()
-        assert "algo_type" not in d
-        assert "sample_strategy" not in d
-        assert "sde_window_seed" not in d
-        assert "iters_per_group" not in d
-        assert "noise_level" in d
-        assert "sde_type" in d
 
 
 class TestDiffusionSamplingConfig:

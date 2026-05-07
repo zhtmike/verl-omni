@@ -40,6 +40,8 @@ class DiffusionModelConfig(BaseConfig):
         "local_path",
         "local_tokenizer_path",
         "architecture",
+        "algo",
+        "pipeline",
     }
 
     path: str = MISSING

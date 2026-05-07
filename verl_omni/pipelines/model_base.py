@@ -41,14 +41,14 @@ class DiffusionModelBase(ABC):
             ...
     """
 
-    _registry: dict[str, type["DiffusionModelBase"]] = {}
+    _registry: dict[tuple[str, str], type["DiffusionModelBase"]] = {}
 
     @classmethod
-    def register(cls, name: str):
-        """Class decorator that registers a subclass under *name*."""
+    def register(cls, name: str, algo: str = "flow_grpo"):
+        """Class decorator that registers a subclass under *name* and *algo*."""
 
         def decorator(subclass: type["DiffusionModelBase"]) -> type["DiffusionModelBase"]:
-            cls._registry[name] = subclass
+            cls._registry[(name, algo)] = subclass
             return subclass
 
         return decorator
@@ -56,17 +56,26 @@ class DiffusionModelBase(ABC):
     @classmethod
     def get_class(cls, model_config: DiffusionModelConfig) -> type["DiffusionModelBase"]:
         """Return the registered subclass for ``model_config.architecture``."""
-        if model_config.architecture not in cls._registry and model_config.external_lib is not None:
+        registered_archs = [k[0] for k in cls._registry]
+        if model_config.architecture not in registered_archs and model_config.external_lib is not None:
             from verl.utils.import_utils import import_external_libs
 
             import_external_libs(model_config.external_lib)
 
+        algo_type = getattr(model_config, "algo", None).algo_type if getattr(model_config, "algo", None) else "flow_grpo"
+        key = (model_config.architecture, algo_type)
+        
+        if key not in cls._registry:
+            fallback_key = (model_config.architecture, "flow_grpo")
+            if fallback_key in cls._registry:
+                return cls._registry[fallback_key]
+
         try:
-            return cls._registry[model_config.architecture]
+            return cls._registry[key]
         except KeyError:
             registered = list(cls._registry)
             raise NotImplementedError(
-                f"No diffusion model registered for architecture={model_config.architecture!r}. "
+                f"No diffusion model registered for architecture={model_config.architecture!r} and algo={algo_type!r}. "
                 f"Registered: {registered}. "
                 f"Set ``external_lib`` in DiffusionModelConfig to load your implementation."
             ) from None
@@ -81,6 +90,21 @@ class DiffusionModelBase(ABC):
             model_config (DiffusionModelConfig): the configuration of the diffusion model.
         """
         pass
+
+    @classmethod
+    def build_algo_scheduler(cls, model_config: DiffusionModelConfig):
+        """Build and configure the trainer-side algorithm scheduler (e.g. SDEWindowScheduler).
+        
+        Args:
+            model_config (DiffusionModelConfig): the configuration of the diffusion model.
+        """
+        # Default fallback: baseline FlowGRPO behaviour
+        from verl_omni.trainer.diffusion.sde_window_scheduler import FlowGRPOWindowScheduler
+        algo = model_config.algo
+        return FlowGRPOWindowScheduler(
+            sde_window_size=algo.sde_window_size if algo else None,
+            sde_window_range=algo.sde_window_range if algo else None,
+        )
 
     @classmethod
     @abstractmethod

@@ -37,15 +37,9 @@ __all__ = [
 class DiffusionRolloutAlgoConfig(BaseConfig):
     """Algorithm configuration for the SDE-based diffusion rollout.
 
-    Toggle :attr:`algo_type` to switch algorithms; MixGRPO-only knobs
     (``sample_strategy``, ``iters_per_group``, ``seed``) are ignored when
     ``algo_type == flow_grpo``.
     """
-
-    # Fields consumed only by the trainer-side scheduler, NOT forwarded to
-    # the rollout backend.
-    _TRAINER_ONLY_FIELDS = frozenset({"algo_type", "sample_strategy", "iters_per_group", "sde_window_seed"})
-    _mutable_fields = {"algo_type", "sample_strategy"}
 
     algo_type: str = "flow_grpo"
     noise_level: float = 1.0
@@ -70,10 +64,6 @@ class DiffusionRolloutAlgoConfig(BaseConfig):
             )
         if self.sample_strategy == "progressive" and self.iters_per_group <= 0:
             raise ValueError("`iters_per_group` must be positive for the progressive strategy.")
-
-    def to_rollout_dict(self) -> dict:
-        """Return only the fields that should be forwarded to the rollout backend."""
-        return {k: v for k, v in self.items() if k not in self._TRAINER_ONLY_FIELDS and not k.startswith("_")}
 
 
 @dataclass

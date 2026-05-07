@@ -38,10 +38,14 @@ def _make_model_config(architecture: str, external_lib=None) -> DiffusionModelCo
 
 class TestDiffusionModelBaseRegistry:
     def test_register_and_retrieve(self):
-        @DiffusionModelBase.register("_TestArch_CPU")
+        @DiffusionModelBase.register("_TestArch_CPU", algo="flow_grpo")
         class _Impl(DiffusionModelBase):
             @classmethod
             def build_scheduler(cls, model_config):
+                pass
+            
+            @classmethod
+            def forward_and_sample_previous_step(cls, *args, **kwargs):
                 pass
 
             @classmethod
@@ -61,10 +65,14 @@ class TestDiffusionModelBaseRegistry:
             DiffusionModelBase.get_class(cfg)
 
     def test_register_decorator_returns_class_unchanged(self):
-        @DiffusionModelBase.register("_TestReturnArch_CPU")
+        @DiffusionModelBase.register("_TestReturnArch_CPU", algo="flow_grpo")
         class _Impl(DiffusionModelBase):
             @classmethod
             def build_scheduler(cls, model_config):
+                pass
+            
+            @classmethod
+            def forward_and_sample_previous_step(cls, *args, **kwargs):
                 pass
 
             @classmethod
