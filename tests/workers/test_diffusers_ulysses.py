@@ -29,6 +29,8 @@ from torch.distributed.device_mesh import init_device_mesh
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 from torch.distributed.fsdp import MixedPrecision, ShardingStrategy
 
+import verl_omni.pipelines._patch  # noqa: F401
+
 
 def get_device_name() -> str:
     if torch.cuda.is_available():
@@ -157,8 +159,12 @@ def _diffusers_ulysses_fwd(sp_size: int, dp_size: int, backend: str):
     torch.distributed.broadcast(hidden_states, src=0)
     torch.distributed.broadcast(encoder_hidden_states, src=0)
 
+    valid_text_lens = [sp_size * 1, sp_size * 3]  # both < text_seq_len
+    encoder_hidden_states_mask = torch.zeros(batch_size, text_seq_len, dtype=torch.bool, device=device)
+    for i, n in enumerate(valid_text_lens):
+        encoder_hidden_states_mask[i, :n] = True
+
     timestep = torch.full([batch_size], 0.5, dtype=torch.float32, device=device)
-    encoder_hidden_states_mask = torch.ones(batch_size, text_seq_len, dtype=torch.bool, device=device)
     img_shapes = [[(1, latent_h, latent_w)]] * batch_size
 
     model_inputs = dict(
@@ -182,12 +188,13 @@ def _diffusers_ulysses_fwd(sp_size: int, dp_size: int, backend: str):
 
     assert output_sp.shape == output_no_sp.shape, f"Shape mismatch: SP {output_sp.shape} vs non-SP {output_no_sp.shape}"
 
-    mean_sp = output_sp.float().mean()
-    mean_no_sp = output_no_sp.float().mean()
-    torch.testing.assert_close(mean_sp, mean_no_sp, rtol=1e-2, atol=1e-2)
+    torch.testing.assert_close(output_sp.float(), output_no_sp.float(), rtol=1e-2, atol=1e-2)
 
     if rank == 0:
-        print(f"[sp_size={sp_size}]  mean(SP)={mean_sp.item():.6f}  mean(no-SP)={mean_no_sp.item():.6f}  ✓")
+        print(
+            f"[sp_size={sp_size}]  mean(SP)={output_sp.float().mean().item():.6f}  "
+            f"mean(no-SP)={output_no_sp.float().mean().item():.6f}  ✓"
+        )
 
 
 # =============================================================================
