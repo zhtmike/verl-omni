@@ -554,7 +554,7 @@ class DiffusersFSDPEngine(BaseEngine):
     def _unpad_nested_embeds(embeds: torch.Tensor, mask: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """Convert a jagged nested tensor pair (embeds, mask) to dense padded tensors."""
         batch_size = embeds.size(0)
-        max_seq_len = int(max(embeds.offsets().diff()))
+        max_seq_len = max(embeds.offsets().diff())
         embed_dim = embeds.size(-1)
         embeds = torch.nested.to_padded_tensor(embeds, padding=0, output_size=(batch_size, max_seq_len, embed_dim))
         mask = torch.nested.to_padded_tensor(mask, padding=0, output_size=(batch_size, max_seq_len))
