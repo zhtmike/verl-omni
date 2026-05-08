@@ -92,6 +92,7 @@ For reward models that are expensive to evaluate (e.g., a VLM judge), the reward
 bash examples/flowgrpo_trainer/run_qwen_image_ocr_lora_async_reward.sh
 ```
 
+
 ## Performance
 
 > All experiments were conducted on *NVIDIA H800* GPUs using the OCR reward.
