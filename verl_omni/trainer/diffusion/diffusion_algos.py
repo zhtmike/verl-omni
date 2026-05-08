@@ -337,7 +337,6 @@ def compute_diffusion_loss_grpo_guard(
         "actor/pg_clipfrac_lower": pg_clipfrac_lower.detach().item(),
         "actor/ratio_mean": ratio_mean.detach().item(),
         "actor/ratio_std": ratio_std.detach().item(),
-        "actor/ratio_mean_bias": ratio_mean_bias.detach().mean().item(),
     }
     return pg_loss, pg_metrics
 

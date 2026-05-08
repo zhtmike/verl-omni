@@ -81,11 +81,3 @@ Override these values on the command line if you want to log under a different p
 ### Diffusion-specific metrics
 
 See the [Metrics Documentation](../../docs/start/metrics.md) for a full description of all diffusion-specific training metrics.
-
-In addition to the standard Flow-GRPO actor metrics, GRPO-Guard logs:
-
-| Metric | Description |
-| --- | --- |
-| `actor/grpo_guard/ratio_mean_bias` | Mean of the per-sample bias term $b_t$. |
-| `actor/grpo_guard/sqrt_dt` | Per-step $\sqrt{-dt}$ used in the rescaling. |
-| `actor/grpo_guard/sigma_t` | Per-step SDE noise scale $\sigma_t$. |

@@ -164,8 +164,7 @@ def test_compute_policy_loss_grpo_guard() -> None:
         "actor/pg_clipfrac",
         "actor/pg_clipfrac_higher",
         "actor/pg_clipfrac_lower",
-        "actor/grpo_guard/ratio_mean_bias",
-        "actor/grpo_guard/sqrt_dt",
-        "actor/grpo_guard/sigma_t",
+        "actor/ratio_mean",
+        "actor/ratio_std",
     ):
         assert key in pg_metrics, key

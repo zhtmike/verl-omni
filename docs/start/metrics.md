@@ -13,7 +13,6 @@ The table below describes metrics specific to diffusion FlowGRPO / GRPO-Guard tr
 | pg_clipfrac_lower | $\hat{P}(r < 1 - \varepsilon)$ | The policy is suppressing low-advantage denoising steps beyond the clip threshold. Asymmetry between higher and lower clipfrac reveals the dominant learning direction. |
 | ratio_mean | $\mathbb{E}[\rho_t]$ | Mean importance ratio across the batch. Should stay close to 1; persistent drift indicates the current policy is diverging from the rollout policy. |
 | ratio_std | $\mathrm{Std}(\rho_t)$ | Spread of the importance ratio. High values signal high-variance gradient updates and may indicate the clip ratio or learning rate is too large. |
-| ratio_mean_bias | $\mathbb{E}[b_t]$ | *(GRPO-Guard only.)* Mean of the per-sample proposal-mean drift correction term $b_t$. Near-zero values indicate the current policy proposal mean closely tracks the rollout policy; large values indicate policy drift that is being corrected by the bias term. |
 | timing_per_image_ms | Latency (ms/image) per stage | Covers rollout, reference log-prob, old log-prob, advantage computation, and actor update; identifies which stage dominates step time and where to focus optimization effort. |
 | throughput | $\dfrac{B \times n}{t_\mathrm{step} \times N}$ (images / GPU / s) | Overall training throughput. Use alongside timing_per_image_ms to evaluate scaling efficiency and detect regressions across runs. |
 
@@ -24,7 +23,6 @@ The table below describes metrics specific to diffusion FlowGRPO / GRPO-Guard tr
 - $\sigma_i$ — reward standard deviation within group $i$
 - $\rho_t$ — importance ratio $\pi_\theta / \pi_{\theta_\mathrm{old}}$ per (image, denoising-timestep) pair
 - $r$ — shorthand for $\rho_t$ in clipping expressions
-- $b_t$ — GRPO-Guard proposal-mean bias term at timestep $t$
 - $\varepsilon$ — clip ratio
 - $N$ — number of GPUs
 - $t_\mathrm{step}$ — wall-clock time per training step
