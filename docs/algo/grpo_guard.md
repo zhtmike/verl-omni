@@ -1,6 +1,6 @@
 # GRPO-Guard
 
-Last updated: 04/30/2026.
+Last updated: 05/08/2026.
 
 GRPO-Guard ([paper](https://arxiv.org/abs/2510.22319)) is an extension of
 [Flow-GRPO](flowgrpo.md) that stabilizes the importance-ratio estimate used in
