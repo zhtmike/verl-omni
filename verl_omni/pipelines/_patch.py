@@ -45,7 +45,7 @@ def _apply_qwen_image_ulysses_mask_fix() -> None:
         if ulysses_degree > 1 and encoder_hidden_states_mask is not None:
             logger.warning(
                 "verl_omni patch applied: QwenImageTransformer2DModel.forward has been monkey-patched to fix "
-                "the Ulysses SP joint-attention-mask layout bug (diffusers<=0.38). "
+                "the Ulysses SP joint-attention-mask layout bug (diffusers==0.38). "
                 "The joint mask is now built in interleaved [txt_0, img_0, txt_1, img_1, ...] order "
                 "to match the post-all-to-all sequence layout when ulysses_degree > 1. "
                 "Remove this patch once the fix is upstreamed to diffusers."
