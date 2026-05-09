@@ -175,7 +175,7 @@ algo:
   # slides the window. null = entire trajectory.
   sde_window_range: null
 
-  # ----- MixGRPO sliding-window scheduler (only used when algo_type=mix_grpo) ---
+# MixGRPO sliding-window scheduler configs
 
   # Sliding strategy: "random" (default) draws a fresh window per step;
   # "progressive" advances by sde_window_size every iters_per_group iterations.
@@ -184,8 +184,7 @@ algo:
   # Number of training iterations spent at each window position (progressive only).
   iters_per_group: 1
 
-  # Base seed for the random window draws (random only). Distinct from the
-  # rollout generator seed (val_kwargs.seed) so the two streams stay decoupled.
+  # Base seed for the random window draws (random only)
   sde_window_seed: 0
 
 # Pipeline configuration for diffusion model generation

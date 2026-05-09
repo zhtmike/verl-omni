@@ -903,7 +903,7 @@ class RayFlowGRPOTrainer:
                 # pass global_steps to trace
                 gen_batch.meta_info["global_steps"] = self.global_steps
 
-                # Get SDE-window overrides for the current step (dynamic for MixGRPO, static pass-through for FlowGRPO)
+                # Get SDE-window overrides for the current step (for MixGRPO only currently)
                 if overrides := self.sde_window_scheduler.get_window(self.global_steps - 1):
                     gen_batch.meta_info["sampling_overrides"] = overrides
 
