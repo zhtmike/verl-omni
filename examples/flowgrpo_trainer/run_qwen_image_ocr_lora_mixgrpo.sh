@@ -3,8 +3,6 @@
 # Reference: MixGRPO (Tencent-Hunyuan), https://arxiv.org/abs/2507.21802
 #            https://github.com/Tencent-Hunyuan/MixGRPO
 #
-# To switch back to FlowGRPO, override:
-#   actor_rollout_ref.rollout.algo.algo_type=flow_grpo
 set -x
 
 # Set WORKSPACE to any writable directory; defaults to $HOME
