@@ -205,13 +205,13 @@ def _resolve_envelope(
         raise ValueError(
             f"sde_window_range must be a list of two ints, got {sde_window_range!r}."
         )
-    lo, hi = int(sde_window_range[0]), int(sde_window_range[1])
-    # ``hi`` follows Python half-open convention in the rollout backend
-    # (``[lo, hi)``); convert to the inclusive ``max_timestep`` we use here.
+    start, end = int(sde_window_range[0]), int(sde_window_range[1])
+    # ``end`` follows Python half-open convention in the rollout backend
+    # (``[start, end)``); convert to the inclusive ``max_timestep`` we use here.
     # Clip to the trajectory limit so the final ODE step (sigma_prev = 0)
     # is never included in an SDE window.
     trajectory_max = max(0, int(num_inference_steps) - 2)
-    return lo, min(max(lo, hi - 1), trajectory_max)
+    return start, min(max(start, end - 1), trajectory_max)
 
 
 def build_sde_window_scheduler(

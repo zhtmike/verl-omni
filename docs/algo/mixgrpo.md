@@ -56,7 +56,7 @@ actor_rollout_ref:
       noise_level: 1.0                # SDE noise magnitude
       sde_type: sde                   # sde | cps
       sde_window_size: null           # window length / "group size"
-      sde_window_range: null          # [lo, hi] envelope; null = full trajectory
+      sde_window_range: null          # [start, end] envelope; null = full trajectory
 
       # ----- MixGRPO sliding-window scheduler (mix_grpo only) -------------
       sample_strategy: random         # random | progressive
@@ -77,10 +77,10 @@ actor_rollout_ref:
 * **`sde_window_size`** -- length of the active SDE window, called
   "group size" in MixGRPO. `null` means "use the entire trajectory" (the
   legacy FlowGRPO setting).
-* **`sde_window_range`** -- a `[lo, hi]` envelope of valid window-start
+* **`sde_window_range`** -- a `[start, end]` envelope of valid window-start
   positions:
   * For `flow_grpo`, the rollout backend draws the start uniformly from
-    `[lo, hi - sde_window_size + 1)`.
+    `[start, end - sde_window_size + 1)`.
   * For `mix_grpo`, this is the eligible range over which the trainer-side
     scheduler slides the window.
   * `null` defaults to the full trajectory `[0, num_inference_steps]`

@@ -78,14 +78,14 @@ class TestMixGRPOProgressiveScheduler:
         assert sched.get_window(100)["sde_window_range"] == [11, 15]
 
     def test_window_is_deterministic_at_rollout(self):
-        # Rollout backend draws ``start`` from ``[lo, hi - size + 1)``.
-        # We collapse ``hi - lo == size`` to make the draw deterministic.
+        # Rollout backend draws ``start`` from ``[start, end - size + 1)``.
+        # We collapse ``end - start == size`` to make the draw deterministic.
         sched = MixGRPOProgressiveScheduler(
             group_size=3, init_timestep=0, max_timestep=10, iters_per_group=1
         )
         ovr = sched.get_window(1)
-        lo, hi = ovr["sde_window_range"]
-        assert hi - lo == ovr["sde_window_size"]
+        start, end = ovr["sde_window_range"]
+        assert end - start == ovr["sde_window_size"]
 
     def test_invalid_iters_per_group_raises(self):
         with pytest.raises(ValueError, match="iters_per_group"):
@@ -125,9 +125,9 @@ class TestMixGRPORandomScheduler:
             group_size=3, init_timestep=0, max_timestep=10, base_seed=7
         )
         for step in range(50):
-            lo, hi = sched.get_window(step)["sde_window_range"]
-            assert 0 <= lo <= 8  # max valid start = 10-3+1 = 8
-            assert hi == lo + 3
+            start, end = sched.get_window(step)["sde_window_range"]
+            assert 0 <= start <= 8  # max valid start = 10-3+1 = 8
+            assert end == start + 3
 
     def test_deterministic_for_same_seed(self):
         a = MixGRPORandomScheduler(group_size=3, init_timestep=0, max_timestep=10, base_seed=0)
@@ -158,11 +158,11 @@ class TestResolveEnvelope:
         assert _resolve_envelope(None, num_inference_steps=1) == (0, 0)
 
     def test_explicit_range_is_used(self):
-        # ``[lo, hi)`` half-open in YAML -> inclusive ``max_timestep`` here.
+        # ``[start, end)`` half-open in YAML -> inclusive ``max_timestep`` here.
         assert _resolve_envelope([2, 8], num_inference_steps=50) == (2, 7)
 
     def test_explicit_range_clipped_to_trajectory_limit(self):
-        # [0, 10) with 10 steps: hi-1=9 but trajectory max is 8 (final ODE step excluded).
+        # [0, 10) with 10 steps: end-1=9 but trajectory max is 8 (final ODE step excluded).
         assert _resolve_envelope([0, 10], num_inference_steps=10) == (0, 8)
 
     def test_invalid_length_raises(self):
