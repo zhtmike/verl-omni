@@ -47,7 +47,7 @@ class DiffusionRolloutAlgoConfig(BaseConfig):
     sde_window_size: Optional[int] = None
     sde_window_range: Optional[list[int]] = None
 
-    # MixGRPO-only knobs
+    # MixGRPO-only configs
     sample_strategy: str = "random"
     iters_per_group: int = 1
     sde_window_seed: int = 0
