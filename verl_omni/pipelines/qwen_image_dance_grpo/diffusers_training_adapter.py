@@ -11,9 +11,15 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+"""Qwen-Image training-side adapter for the DanceGRPO algorithm.
 
-"""
-Qwen-Image training-side adapter for diffusers-based diffusion RL.
+DanceGRPO (https://arxiv.org/abs/2505.07818) is structurally a sibling of
+FlowGRPO: both algorithms re-run a single denoising step under the policy
+and use a clipped-PPO objective on group-normalised image-level rewards.
+The only on-policy difference is the SDE step formula
+(implemented in :class:`~verl_omni.pipelines.schedulers.FlowMatchSDEDiscreteScheduler`
+under ``sde_type="dance"``), so this adapter reuses the FlowGRPO scaffolding
+verbatim and only changes the registry key + the ``sde_type`` it requests.
 """
 
 from typing import Optional
@@ -35,17 +41,17 @@ from verl_omni.pipelines.qwen_image_flow_grpo.common import (
 from verl_omni.pipelines.schedulers import FlowMatchSDEDiscreteScheduler
 from verl_omni.workers.config import DiffusionModelConfig
 
-__all__ = ["QwenImage"]
+__all__ = ["QwenImageDanceGRPO"]
 
 
-def _build_qwen_image_scheduler(model_path: str) -> FlowMatchSDEDiscreteScheduler:
+def _build_scheduler(model_path: str) -> FlowMatchSDEDiscreteScheduler:
     return FlowMatchSDEDiscreteScheduler.from_pretrained(
         pretrained_model_name_or_path=model_path,
         subfolder="scheduler",
     )
 
 
-def _configure_qwen_image_scheduler(
+def _configure_scheduler(
     scheduler: FlowMatchSDEDiscreteScheduler,
     *,
     height: int,
@@ -66,47 +72,28 @@ def _configure_qwen_image_scheduler(
     scheduler.set_timesteps(num_inference_steps, device=device, sigmas=sigmas, mu=mu)
 
 
-@DiffusionModelBase.register("QwenImagePipeline", algorithm="flow_grpo")
-class QwenImage(DiffusionModelBase):
-    """Training adapter for the Qwen-Image diffusion model.
+@DiffusionModelBase.register("QwenImagePipeline", algorithm="dance_grpo")
+class QwenImageDanceGRPO(DiffusionModelBase):
+    """Training adapter for the Qwen-Image diffusion model under DanceGRPO.
 
     Implements the :class:`~verl_omni.pipelines.model_base.DiffusionModelBase`
-    interface for the ``QwenImagePipeline`` architecture, providing scheduler
-    configuration, model-input construction, and the forward/sampling step
-    used during RL training (e.g. FlowGRPO).
-
-    Registered under ``"QwenImagePipeline"`` so it is automatically selected
-    when ``DiffusionModelConfig.architecture`` matches that name.
+    interface for the ``QwenImagePipeline`` architecture using the DanceGRPO
+    SDE formulation. Registered under ``("QwenImagePipeline", "dance_grpo")``;
+    select it by setting ``actor_rollout_ref.model.algorithm=dance_grpo`` (or
+    equivalently ``algorithm.adv_estimator=dance_grpo`` when
+    ``actor_rollout_ref.model.algorithm`` is left at its default
+    ``${oc.select:algorithm.adv_estimator,flow_grpo}`` template value).
     """
 
     @classmethod
     def build_scheduler(cls, model_config: DiffusionModelConfig):
-        """Build and configure the SDE scheduler for the Qwen-Image model.
-
-        Args:
-            model_config (DiffusionModelConfig): Configuration for the diffusion model,
-                used to determine the model path and timestep settings.
-
-        Returns:
-            FlowMatchSDEDiscreteScheduler: Scheduler with timesteps already set
-                for the current device.
-        """
-        scheduler = _build_qwen_image_scheduler(model_config.local_path)
+        scheduler = _build_scheduler(model_config.local_path)
         cls.set_timesteps(scheduler, model_config, get_device_name())
         return scheduler
 
     @classmethod
     def set_timesteps(cls, scheduler: FlowMatchSDEDiscreteScheduler, model_config: DiffusionModelConfig, device: str):
-        """Configure timesteps and sigmas on the scheduler for Qwen-Image.
-
-        Args:
-            scheduler (FlowMatchSDEDiscreteScheduler): The scheduler whose timesteps
-                and sigmas will be set.
-            model_config (DiffusionModelConfig): Configuration providing height, width,
-                and number of inference steps.
-            device (str): The device (e.g. ``"cuda"``) to move the timesteps to.
-        """
-        _configure_qwen_image_scheduler(
+        _configure_scheduler(
             scheduler,
             height=model_config.pipeline.height,
             width=model_config.pipeline.width,
@@ -128,26 +115,6 @@ class QwenImage(DiffusionModelBase):
         micro_batch: TensorDict,
         step: int,
     ) -> tuple[dict, dict]:
-        """Build Qwen-Image-specific inputs for the transformer forward pass.
-
-        Args:
-            module (QwenImageTransformer2DModel): The Qwen-Image transformer module.
-            model_config (DiffusionModelConfig): Configuration providing guidance
-                scale and other model settings.
-            latents (torch.Tensor): Full latent tensor of shape ``(B, T, ...)``.
-            timesteps (torch.Tensor): Full timestep tensor of shape ``(B, T)``.
-            prompt_embeds (torch.Tensor): Positive prompt embeddings of shape ``(B, L, D)``.
-            prompt_embeds_mask (torch.Tensor): Attention mask for *prompt_embeds* of shape ``(B, L)``.
-            negative_prompt_embeds (torch.Tensor): Negative prompt embeddings of shape ``(B, L, D)``.
-            negative_prompt_embeds_mask (torch.Tensor): Attention mask for *negative_prompt_embeds*.
-            micro_batch (TensorDict): Micro-batch containing metadata such as
-                ``height``, ``width``, and ``vae_scale_factor``.
-            step (int): Current denoising step index used to slice *latents* and *timesteps*.
-
-        Returns:
-            tuple[dict, dict]: A pair of ``(model_inputs, negative_model_inputs)`` dicts
-                ready to be unpacked into the transformer forward call.
-        """
         height = tu.get_non_tensor_data(data=micro_batch, key="height", default=None)
         width = tu.get_non_tensor_data(data=micro_batch, key="width", default=None)
         vae_scale_factor = tu.get_non_tensor_data(data=micro_batch, key="vae_scale_factor", default=None)
@@ -195,28 +162,12 @@ class QwenImage(DiffusionModelBase):
         scheduler_inputs: Optional[TensorDict | dict[str, torch.Tensor]],
         step: int,
     ):
-        """Run the Qwen-Image transformer and sample the previous denoising step.
+        """Run the transformer once and sample the previous step under the DanceGRPO SDE.
 
-        Used by RL algorithms (FlowGRPO) that require log-probabilities for
-        reversed-sampling.  Applies True-CFG guidance when
-        ``model_config.true_cfg_scale > 1.0``.
-
-        Args:
-            module (QwenImageTransformer2DModel): The Qwen-Image transformer module.
-            scheduler (FlowMatchSDEDiscreteScheduler): Scheduler used to sample
-                the previous step and compute log-probabilities.
-            model_config (DiffusionModelConfig): Configuration providing
-                ``true_cfg_scale``, ``algo.noise_level``, and ``algo.sde_type``.
-            model_inputs (dict[str, torch.Tensor]): Positive-prompt inputs for
-                the transformer forward pass.
-            negative_model_inputs (Optional[dict[str, torch.Tensor]]): Negative-prompt
-                inputs used for True-CFG; may be ``None`` when CFG is disabled.
-            scheduler_inputs (Optional[TensorDict | dict[str, torch.Tensor]]): Must
-                contain ``"all_latents"`` and ``"all_timesteps"`` tensors.
-            step (int): Current denoising step index.
-
-        Returns:
-            tuple: A 3-tuple of ``(log_prob, prev_sample_mean, std_dev_t)``.
+        Differs from the FlowGRPO adapter only in the ``sde_type`` passed to
+        :meth:`FlowMatchSDEDiscreteScheduler.sample_previous_step` — the DanceGRPO
+        update uses ``noise_level`` as the ``eta`` coefficient rather than the
+        FlowGRPO ``sqrt(sigma/(1-sigma))`` scaling.
         """
         assert scheduler_inputs is not None
         latents = scheduler_inputs["all_latents"]
@@ -235,7 +186,7 @@ class QwenImage(DiffusionModelBase):
             timestep=timesteps[:, step],
             noise_level=model_config.algo.noise_level,
             prev_sample=latents[:, step + 1].float(),
-            sde_type=model_config.algo.sde_type,
+            sde_type="dance",
             return_logprobs=True,
         )
         return log_prob, prev_sample_mean, std_dev_t

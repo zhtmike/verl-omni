@@ -65,7 +65,7 @@ class FlowMatchSDEDiscreteScheduler(FlowMatchEulerDiscreteScheduler):
         return_dict: bool = True,
         noise_level: float = 0.7,
         prev_sample: Optional[torch.FloatTensor] = None,
-        sde_type: Literal["sde", "cps"] = "sde",
+        sde_type: Literal["sde", "cps", "dance"] = "sde",
         return_logprobs: bool = True,
     ) -> FlowMatchSDEDiscreteSchedulerOutput | tuple:
         """
@@ -153,10 +153,10 @@ class FlowMatchSDEDiscreteScheduler(FlowMatchEulerDiscreteScheduler):
         per_token_timesteps: Optional[torch.Tensor] = None,
         noise_level: float = 0.7,
         prev_sample: Optional[torch.Tensor] = None,
-        sde_type: Literal["cps", "sde"] = "sde",
+        sde_type: Literal["cps", "sde", "dance"] = "sde",
         return_logprobs: bool = True,
     ):
-        assert sde_type in ["sde", "cps"]
+        assert sde_type in ["sde", "cps", "dance"]
         assert sample.dtype == torch.float32
         if prev_sample is not None:
             assert prev_sample.dtype == torch.float32
@@ -221,6 +221,40 @@ class FlowMatchSDEDiscreteScheduler(FlowMatchEulerDiscreteScheduler):
 
             if return_logprobs:
                 log_prob = -((prev_sample.detach() - prev_sample_mean) ** 2)
+            else:
+                log_prob = None
+
+        elif sde_type == "dance":
+            # DanceGRPO SDE step
+            # (https://arxiv.org/abs/2505.07818,
+            #  https://github.com/ByteDance-Seed/DanceGRPO/blob/main/fastvideo/train_grpo_qwenimage.py).
+            # Here ``noise_level`` plays the role of DanceGRPO's ``eta``.
+            delta_t = sigma - sigma_prev  # = -dt, always >= 0
+            std_dev_t = noise_level * torch.sqrt(delta_t)
+
+            pred_original_sample = sample - sigma * model_output
+            score_estimate = -(sample - pred_original_sample * (1 - sigma)) / (sigma**2)
+            log_term = -0.5 * noise_level**2 * score_estimate
+
+            # dsigma = sigma_prev - sigma = dt (negative); DanceGRPO writes
+            # ``prev_sample_mean = latents + dsigma * model_output + log_term * dsigma``.
+            prev_sample_mean = sample + dt * model_output + log_term * dt
+
+            if prev_sample is None:
+                variance_noise = randn_tensor(
+                    model_output.shape,
+                    generator=generator,
+                    device=model_output.device,
+                    dtype=model_output.dtype,
+                )
+                prev_sample = prev_sample_mean + std_dev_t * variance_noise
+
+            if return_logprobs:
+                log_prob = (
+                    -((prev_sample.detach() - prev_sample_mean) ** 2) / (2 * (std_dev_t**2))
+                    - torch.log(std_dev_t)
+                    - torch.log(torch.sqrt(2 * torch.as_tensor(math.pi)))
+                )
             else:
                 log_prob = None
 

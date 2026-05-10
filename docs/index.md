@@ -55,6 +55,7 @@ api/utils.rst
 
 contributing/editing-agent-instructions.md
 contributing/integrating_a_diffusion_model.md
+contributing/integrating_a_new_algorithm.md
 ```
 
 ## Contribution

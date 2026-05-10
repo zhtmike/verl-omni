@@ -12,13 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from . import (
-    _patch,  # noqa: F401 — apply Ulysses mask fix
-    qwen_image_dance_grpo,
-    qwen_image_flow_grpo,
-)
-from .qwen_image_dance_grpo import *  # noqa: F401, F403
-from .qwen_image_flow_grpo import *  # noqa: F401, F403
+from .diffusers_training_adapter import QwenImageDanceGRPO
+from .vllm_omni_rollout_adapter import QwenImageDanceGRPOPipelineWithLogProb
 
-__all__ = list(qwen_image_flow_grpo.__all__)
-__all__ += list(qwen_image_dance_grpo.__all__)
+__all__ = ["QwenImageDanceGRPO", "QwenImageDanceGRPOPipelineWithLogProb"]
