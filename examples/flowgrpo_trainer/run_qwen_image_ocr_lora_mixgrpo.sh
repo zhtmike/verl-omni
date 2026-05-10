@@ -61,6 +61,7 @@ python3 -m verl_omni.trainer.diffusion.main_flowgrpo \
     actor_rollout_ref.rollout.val_kwargs.algo.noise_level=0.0 \
     actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=32 \
     reward.num_workers=$((NUM_GPUS_ACTOR_ROLLOUT_REWARD / REWARD_TP)) \
+    reward.reward_manager.name=visual \
     reward.reward_model.enable=True \
     reward.reward_model.model_path=$reward_model_name \
     reward.reward_model.rollout.name=$REWARD_ENGINE \
@@ -68,7 +69,7 @@ python3 -m verl_omni.trainer.diffusion.main_flowgrpo \
     reward.custom_reward_function.path=$reward_function_path \
     reward.custom_reward_function.name=compute_score_ocr \
     trainer.logger='["console", "wandb"]' \
-    trainer.project_name=mix_grpo \
+    trainer.project_name=flow_grpo \
     trainer.experiment_name=qwen_image_ocr_lora_mixgrpo \
     trainer.log_val_generations=8 \
     trainer.val_before_train=False \
