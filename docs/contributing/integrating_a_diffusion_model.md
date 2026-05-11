@@ -67,8 +67,8 @@ The two adapters must agree on:
   match `model_index.json::_class_name` exactly. For Qwen-Image this is
   `"QwenImagePipeline"`.
 - **Algorithm string** (the `algorithm=` keyword on `@register(...)`).
-  Defaults to `"flow_grpo"`. Only override it when integrating a
-  different RL algorithm — see
+  For this guide the value is always `"flow_grpo"`. When integrating a
+  different RL algorithm use the appropriate algorithm name — see
   [`integrating_a_new_algorithm.md`](integrating_a_new_algorithm.md).
 - **Prompt-encoding format** of the embeddings shipped through the agent
   loop. The rollout always returns padded `(B, L, D)` + `(B, L)` mask;
@@ -378,8 +378,9 @@ Before opening the PR, confirm every box:
 - [ ] [`verl_omni/pipelines/__init__.py`](../../verl_omni/pipelines/__init__.py)
       imports the new package.
 - [ ] Architecture string on both `@register(...)` decorators matches
-      `model_index.json::_class_name`; the `algorithm=` keyword (default
-      `"flow_grpo"`) matches the algorithm you are integrating against.
+      `model_index.json::_class_name`; the `algorithm=` keyword matches
+      the algorithm you are integrating against (e.g. `"flow_grpo"` for
+      FlowGRPO).
 - [ ] Any new `DiffusionPipelineConfig` field is mirrored in **both**
       [`diffusion_rollout.yaml`](../../verl_omni/trainer/config/diffusion/rollout/diffusion_rollout.yaml)
       and
