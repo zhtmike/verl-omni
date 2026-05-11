@@ -65,11 +65,6 @@ class DiffusionModelBase(ABC):
         algo_type = getattr(model_config, "algo", None).algo_type if getattr(model_config, "algo", None) else "flow_grpo"
         key = (model_config.architecture, algo_type)
         
-        if key not in cls._registry:
-            fallback_key = (model_config.architecture, "flow_grpo")
-            if fallback_key in cls._registry:
-                return cls._registry[fallback_key]
-
         try:
             return cls._registry[key]
         except KeyError:
