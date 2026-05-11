@@ -84,7 +84,7 @@ class TestDiffusionRolloutAlgoConfig:
             DiffusionRolloutAlgoConfig(algo_type="bogus")
 
     def test_mix_grpo_requires_window_size(self):
-        with pytest.raises(ValueError, match="sde_window_size"):
+        with pytest.raises(TypeError, match="sde_window_size"):
             DiffusionRolloutAlgoConfig(algo_type="mix_grpo", sde_window_size=None)
 
 
