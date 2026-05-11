@@ -72,7 +72,7 @@ The script sets:
 
 ```bash
 trainer.logger='["console", "wandb"]'
-trainer.project_name=flow_grpo
+trainer.project_name=grpo_guard
 trainer.experiment_name=qwen_image_ocr_lora
 ```
 
