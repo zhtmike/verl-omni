@@ -50,7 +50,6 @@ python3 -m verl_omni.trainer.diffusion.main_flowgrpo \
     actor_rollout_ref.rollout.layered_summon=True \
     actor_rollout_ref.rollout.pipeline.true_cfg_scale=4.0 \
     actor_rollout_ref.rollout.pipeline.max_sequence_length=256 \
-    actor_rollout_ref.rollout.algo.algo_type=mix_grpo \
     actor_rollout_ref.rollout.algo.sample_strategy=random \
     actor_rollout_ref.rollout.algo.sde_window_seed=42 \
     actor_rollout_ref.rollout.algo.sde_window_size=2 \
@@ -68,7 +67,7 @@ python3 -m verl_omni.trainer.diffusion.main_flowgrpo \
     reward.custom_reward_function.path=$reward_function_path \
     reward.custom_reward_function.name=compute_score_ocr \
     trainer.logger='["console", "wandb"]' \
-    trainer.project_name=flow_grpo \
+    trainer.project_name=mix_grpo \
     trainer.experiment_name=qwen_image_ocr_lora_mixgrpo \
     trainer.log_val_generations=8 \
     trainer.val_before_train=False \
