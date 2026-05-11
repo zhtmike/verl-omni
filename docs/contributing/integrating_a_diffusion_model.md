@@ -7,7 +7,7 @@ model into VeRL-Omni so it can be trained end-to-end with the **FlowGRPO**
 algorithm. The contracts described below (registry hooks, adapter
 classmethods, scheduler choice, custom-output field names) are specific to
 the FlowGRPO trainer; other RL algorithms may impose different requirements
-(see [`integrating_a_new_algorithm.md`](integrating_a_new_algorithm.md) for
+(see [`integrating_a_new_algorithm_for_diffusion_model.md`](integrating_a_new_algorithm_for_diffusion_model.md) for
 how algorithm dispatch is layered on top of model dispatch).
 
 We use the **Qwen-Image** integration
@@ -68,7 +68,7 @@ The two adapters must agree on:
 - **Algorithm string** (the `algorithm=` keyword on `@register(...)`).
   For this guide the value is always `"flow_grpo"`. When integrating a
   different RL algorithm use the appropriate algorithm name — see
-  [`integrating_a_new_algorithm.md`](integrating_a_new_algorithm.md).
+  [`integrating_a_new_algorithm_for_diffusion_model.md`](integrating_a_new_algorithm_for_diffusion_model.md).
 - **Prompt-encoding format** of the embeddings shipped through the agent
   loop. The rollout always returns padded `(B, L, D)` + `(B, L)` mask;
   the training adapter is free to convert to whatever the transformer

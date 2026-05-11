@@ -1,4 +1,4 @@
-# How to Integrate a New PPO-like Algorithm
+# How to Integrate a New PPO-like Algorithm for Diffusion Model
 
 Last updated: 05/10/2026.
 
