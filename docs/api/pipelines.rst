@@ -17,9 +17,11 @@ diffusion model architecture into the training loop:
 Adapters are auto-selected by matching the pair
 ``(DiffusionModelConfig.architecture, DiffusionModelConfig.algorithm)`` against the
 registered ``(architecture, algorithm)`` key. The architecture is read from the
-model's ``model_index.json``; the algorithm defaults to
-``${oc.select:algorithm.adv_estimator,flow_grpo}`` so toggling
-``algorithm.adv_estimator`` is enough to swap the entire adapter pair.
+model's ``model_index.json``; the algorithm string is taken from the model config's
+``actor_rollout_ref.model.algorithm`` value. In the current config wiring,
+``algorithm.adv_estimator`` is derived from that setting, so changing
+``algorithm.adv_estimator`` alone does not necessarily swap the adapter pair; update
+the model algorithm value instead.
 
 .. autosummary::
    :nosignatures:
