@@ -80,7 +80,7 @@ class TestDiffusionRolloutAlgoConfig:
         assert cfg.sde_window_range is None
 
     def test_invalid_algo_type_raises(self):
-        with pytest.raises(ValueError):
+        with pytest.raises(TypeError):
             DiffusionRolloutAlgoConfig(algo_type="bogus")
 
     def test_mix_grpo_requires_window_size(self):
