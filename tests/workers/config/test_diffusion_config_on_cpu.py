@@ -80,11 +80,11 @@ class TestDiffusionRolloutAlgoConfig:
         assert cfg.sde_window_range is None
 
     def test_invalid_sample_strategy_raises(self):
-        with pytest.raises(ValueError, match="sample_strategy"):
+        with pytest.raises(ValueError, match="Unknown sample_strategy"):
             DiffusionRolloutAlgoConfig(sample_strategy="bogus")
 
-    def test_progressive_requires_positive_iters_per_group(self):
-        with pytest.raises(ValueError, match="iters_per_group"):
+    def test_progressive_requires_positive_iters(self):
+        with pytest.raises(ValueError, match="iters_per_group.*positive"):
             DiffusionRolloutAlgoConfig(sample_strategy="progressive", iters_per_group=0)
 
 
