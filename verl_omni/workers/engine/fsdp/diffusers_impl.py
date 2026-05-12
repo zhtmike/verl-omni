@@ -255,7 +255,7 @@ class DiffusersFSDPEngine(BaseEngine):
             if param.requires_grad:
                 orig_dtype = param.dtype
                 param.data = param.data.to(torch.float32)
-                logger.info("LoRA param %s: %s -> %s", name, orig_dtype, param.dtype)
+                logger.debug("LoRA param %s: %s -> %s", name, orig_dtype, param.dtype)
 
         return module
 
