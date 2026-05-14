@@ -155,6 +155,7 @@ python3 -m verl_omni.trainer.diffusion.main_flowgrpo \
     trainer.test_freq=-1 \
     trainer.save_freq=-1 \
     trainer.resume_mode=disable \
-    trainer.total_training_steps=${TOTAL_TRAIN_STEPS}
+    trainer.total_training_steps=${TOTAL_TRAIN_STEPS} \
+    "$@"
 
 echo "FlowGRPO diffusion e2e test passed (training completed successfully)."
