@@ -90,12 +90,3 @@ by the engine workers. They are typically built from
 
 .. autoclass:: verl_omni.workers.config.DiffusionSamplingConfig
    :members:
-
-.. autoclass:: verl_omni.workers.config.DiffusionPipelineConfig
-   :members:
-
-.. autoclass:: verl_omni.workers.config.DiffusionRolloutAlgoConfig
-   :members:
-
-.. autoclass:: verl_omni.workers.config.DiffusionSamplingConfig
-   :members:
