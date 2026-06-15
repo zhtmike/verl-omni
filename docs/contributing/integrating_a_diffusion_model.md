@@ -13,8 +13,7 @@ for PPO-like policy-gradient algorithms, and
 [`integrating_a_new_direct_preference_algorithm_for_diffusion_model.md`](integrating_a_new_direct_preference_algorithm_for_diffusion_model.md)
 for direct-preference algorithms.
 
-**If your model is not a diffusers model** (does not inherit from
-`diffusers.ModelMixin`), use
+**If diffusers cannot load your model**, use
 [`integrating_a_non_diffusers_model.md`](integrating_a_non_diffusers_model.md)
 instead. That guide covers the `NonDiffusersModelBase` path using BAGEL-7B-MoT as the
 worked example.

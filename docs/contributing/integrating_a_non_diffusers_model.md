@@ -54,24 +54,10 @@ The **model module** (`<model>_model.py`) is the new piece: a standalone
 
 ## When to Use NonDiffusersModelBase
 
-Use `NonDiffusersModelBase` when:
-
-1. **The upstream model is not a `diffusers.ModelMixin`** — it may be a
-   Hugging Face `PreTrainedModel`, a standalone PyTorch module, or a vllm-omni
-   ported model.
-
-This is the only hard requirement.  The following are common patterns you
-will encounter with such models (they do **not** decide whether to use
-``NonDiffusersModelBase``, but they shape the implementation):
-
-2. **The model has a non-standard config format** — no `model_index.json`,
-   non-standard config keys, or multiple sub-configs (e.g. BAGEL has separate
-   `config.json`, `llm_config.json`, `vit_config.json`).
-3. **The model requires custom weight-loading logic** — e.g. remapping
-   checkpoint keys from `language_model.model.*` to local parameter names,
-   or loading from `ema.safetensors` instead of `diffusion_pytorch_model.safetensors`.
-4. **The model needs custom FSDP sharding** — different layer class names
-   (``BagelMoTLayer``) or different parameter grouping.
+Use `NonDiffusersModelBase` when **diffusers cannot load the model**.
+Everything else (custom configs, weight loading, FSDP sharding)
+can be handled through the standard ``DiffusionModelBase`` path by
+overriding ``build_module()``.
 
 ---
 
@@ -103,9 +89,6 @@ The key difference from the diffusers path:
 | `build_module()` | Return `None` → default AutoModel path | Return `MyModel.from_pretrained(...)` |
 | Config | `model_index.json` → `_class_name` | `config.json` → custom struct (e.g. `BagelTrainingConfig`) |
 | Architecture registration | Auto-detected from `model_index.json` | Explicit: `+actor_rollout_ref.model.architecture=...` |
-
-The ``DiffusionModelBase`` contract (``prepare_model_inputs``,
-``forward_and_sample_previous_step``) is identical for both paths.
 
 ---
 
@@ -529,15 +512,6 @@ once and sum to `(B, L_total)`. SOI/EOI tokens should be on the text pathway
 
 ## When to Use the Diffusers Path Instead
 
-Even if your model has a standalone implementation, consider using the
-standard diffusers path ({doc}`integrating_a_diffusion_model`) if:
-
-- The model is also available as a `diffusers.ModelMixin` on Hugging Face.
-- The model uses standard prompt embeddings (not internal text processing).
-- The model's config is compatible with `model_index.json`.
-- You want automatic sigmas, CFG, and other infrastructure that diffusers
-  provides for free.
-
-The non-diffusers path trades off some of the diffusers automation for full
-control over weight loading, architecture, and text processing. Use it when
-you need that control, or when diffusers simply does not support your model.
+If diffusers can load the model, use
+{doc}`integrating_a_diffusion_model`.  Override ``build_module()`` there
+for any custom loading you need.
