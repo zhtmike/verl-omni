@@ -69,13 +69,13 @@ different path:
 
 ```text
   ┌─────────────────────────────────┐                ┌──────────────────────────────┐
-  │ Rollout worker (vllm-omni)      │   trajectory   │ Trainer worker (FSDP)         │
+  │ Rollout worker (vllm-omni)      │   trajectory   │ Trainer worker (FSDP)        │
   │                                 │ ─────────────▶ │                              │
-  │ BagelPipeline (upstream)        │  latents,      │ BagelForTraining              │
-  │  └─ forward() + SDE loop        │  log_probs,    │  (NonDiffusersModelBase)      │
-  │                                 │  prompt ids    │  └─ forward(hidden_states,    │
-  │ BagelPipelineWithLogProb        │                │     timestep,                 │
-  │  └─ wraps with SDE scheduler    │                │     text_token_ids, ...)      │
+  │ BagelPipeline (upstream)        │  latents,      │ BagelForTraining             │
+  │  └─ forward() + SDE loop        │  log_probs,    │  (NonDiffusersModelBase)     │
+  │                                 │  prompt ids    │  └─ forward(hidden_states,   │
+  │ BagelPipelineWithLogProb        │                │     timestep,                │
+  │  └─ wraps with SDE scheduler    │                │     text_token_ids, ...)     │
   │  └─ fills prompt text from IDs  │                │                              │
   └─────────────────────────────────┘                └──────────────────────────────┘
 ```
