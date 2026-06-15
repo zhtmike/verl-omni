@@ -54,9 +54,12 @@ def setup_bagel_sigmas(
 ) -> list[float]:
     """Compute shifted sigmas and configure the scheduler for BAGEL.
 
-    Returns the sigma list (dropping terminal 0) for reference.
+    Returns the sigma list (before the terminal zero) for reference.
     """
-    t = torch.linspace(1, 0, num_steps, dtype=torch.float32, device=device or "cpu")
+    if num_steps <= 0:
+        raise ValueError(f"num_steps must be positive, got {num_steps}")
+
+    t = torch.linspace(1, 0, num_steps + 1, dtype=torch.float32, device=device or "cpu")
     t_shifted = bagel_time_shift(shift, t)
     sigmas = t_shifted[:-1].tolist()
 

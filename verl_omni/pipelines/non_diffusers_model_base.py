@@ -191,9 +191,9 @@ class NonDiffusersModelBase(nn.Module, ABC):
         for module in self.modules():
             if module is self:
                 continue
-            disable_adapters_fn = getattr(module, "disable_adapters", None)
-            if callable(disable_adapters_fn):
-                disable_adapters_fn()
+            enable_adapters_fn = getattr(module, "enable_adapters", None)
+            if callable(enable_adapters_fn):
+                enable_adapters_fn(False)
 
     def enable_adapters(self) -> None:
         """Re-enable all PEFT adapters after ``disable_adapters``."""
@@ -202,7 +202,7 @@ class NonDiffusersModelBase(nn.Module, ABC):
                 continue
             enable_adapters_fn = getattr(module, "enable_adapters", None)
             if callable(enable_adapters_fn):
-                enable_adapters_fn()
+                enable_adapters_fn(True)
 
     # Checkpoint persistence
 
