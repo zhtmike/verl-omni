@@ -9,9 +9,8 @@ and is **not** loaded through `diffusers.AutoModel.from_pretrained` — into
 VeRL-Omni so it can be trained end-to-end with the **FlowGRPO** algorithm.
 
 Non-diffusers models manage their own architecture, configuration format,
-weight-loading logic, and (optionally) internal text processing (token
-embedding inside the forward pass rather than relying on pre-computed
-prompt embeddings). BAGEL-7B-MoT is the reference implementation.
+and weight-loading logic — none of which go through diffusers APIs. BAGEL-7B-MoT
+is the reference implementation.
 
 If your model is a standard diffusers model, use
 [`integrating_a_diffusion_model.md`](integrating_a_diffusion_model.md)
@@ -55,22 +54,24 @@ The **model module** (`<model>_model.py`) is the new piece: a standalone
 
 ## When to Use NonDiffusersModelBase
 
-Use `NonDiffusersModelBase` when **any** of the following is true:
+Use `NonDiffusersModelBase` when:
 
 1. **The upstream model is not a `diffusers.ModelMixin`** — it may be a
    Hugging Face `PreTrainedModel`, a standalone PyTorch module, or a vllm-omni
    ported model.
-2. **The model handles text embedding internally** — it takes raw token IDs
-   (not pre-computed embeddings) in its forward pass.
-3. **The model has a non-standard config format** — no `model_index.json`,
+
+This is the only hard requirement.  The following are common patterns you
+will encounter with such models (they do **not** decide whether to use
+``NonDiffusersModelBase``, but they shape the implementation):
+
+2. **The model has a non-standard config format** — no `model_index.json`,
    non-standard config keys, or multiple sub-configs (e.g. BAGEL has separate
    `config.json`, `llm_config.json`, `vit_config.json`).
-4. **The model requires custom weight-loading logic** — e.g. remapping
+3. **The model requires custom weight-loading logic** — e.g. remapping
    checkpoint keys from `language_model.model.*` to local parameter names,
    or loading from `ema.safetensors` instead of `diffusion_pytorch_model.safetensors`.
-5. **The model needs custom FSDP sharding** — different layer class names
-   (`BagelMoTLayer` vs `QwenImageTransformerBlock`) or different parameter
-   grouping.
+4. **The model needs custom FSDP sharding** — different layer class names
+   (``BagelMoTLayer``) or different parameter grouping.
 
 ---
 
@@ -100,9 +101,11 @@ The key difference from the diffusers path:
 | Module loading | `diffusers.AutoModel.from_pretrained()` | `MyModel.from_pretrained(model_path)` |
 | Module base class | `ModelMixin` (from diffusers) | `NonDiffusersModelBase` (from verl-omni) |
 | `build_module()` | Return `None` → default AutoModel path | Return `MyModel.from_pretrained(...)` |
-| Text input to `forward()` | Pre-computed embeddings `(B, L, D)` | Token IDs `(B, L)` |
-| `prepare_model_inputs()` | Builds dict with `prompt_embeds` key | Builds dict with `text_token_ids` key |
 | Config | `model_index.json` → `_class_name` | `config.json` → custom struct (e.g. `BagelTrainingConfig`) |
+| Architecture registration | Auto-detected from `model_index.json` | Explicit: `+actor_rollout_ref.model.architecture=...` |
+
+The ``DiffusionModelBase`` contract (``prepare_model_inputs``,
+``forward_and_sample_previous_step``) is identical for both paths.
 
 ---
 
@@ -289,52 +292,10 @@ directly. When it returns `None` (the default), the engine falls back to
 
 ### 3.2 Implement `prepare_model_inputs`
 
-Unlike diffusers models that receive `prompt_embeds` and
-`prompt_embeds_mask` from the agent loop, non-diffusers models typically
-read **raw token IDs** from the micro-batch `TensorDict`. BAGEL stores
-pre-tokenized IDs in `micro_batch["bagel_prompt_ids"]`:
-
-```python
-@classmethod
-def prepare_model_inputs(cls, module, model_config, latents, timesteps,
-                         prompt_embeds, prompt_embeds_mask,
-                         negative_prompt_embeds, negative_prompt_embeds_mask,
-                         micro_batch, step):
-    B = latents.shape[0]
-    device = latents.device
-
-    hidden_states = latents[:, step]
-    timestep = timesteps[:, step]
-
-    # Read pre-tokenized IDs from the data pipeline (NOT from prompt_embeds).
-    text_token_ids, text_attention_mask = cls._token_ids_to_batch(
-        micro_batch["my_prompt_ids"], device
-    )
-
-    model_inputs = {
-        "hidden_states": hidden_states,
-        "timestep": timestep,
-        "text_token_ids": text_token_ids,
-        "text_attention_mask": text_attention_mask,
-        # ... any other model-specific keys
-    }
-
-    # Unconditional: set text_token_ids=None (model handles it internally)
-    negative_model_inputs = {
-        "hidden_states": hidden_states,
-        "timestep": timestep,
-        "text_token_ids": None,
-        # ...
-    }
-
-    return model_inputs, negative_model_inputs
-```
-
-Key contract: the `prompt_embeds` / `negative_prompt_embeds` arguments
-are **still received** from the agent loop (they are always padded
-tensors of the standard format), but non-diffusers models may **ignore**
-them in favor of token IDs from `micro_batch`. BAGEL ignores
-`prompt_embeds` entirely and reads `bagel_prompt_ids` instead.
+Receives ``prompt_embeds``, ``latents``, ``timesteps``, and ``micro_batch``
+from the trainer engine and returns a pair of model-kwargs dicts (positive
+and negative).  See {doc}`integrating_a_diffusion_model` for the full
+signature.
 
 ### 3.3 Implement `forward_and_sample_previous_step`
 
