@@ -46,6 +46,18 @@ def bagel_time_shift(shift: float, t):
     return (shift * t) / (1 + (shift - 1) * t)
 
 
+def vllm_omni_num_timesteps(bagel_num_timesteps: int) -> int:
+    """Map official BAGEL ``num_timesteps`` to vllm-omni 0.22+ ``generate_image`` input.
+
+    vllm-omni uses ``linspace(1, 0, num_timesteps + 1)`` (one extra denoise step).
+    Compensate by passing ``N - 1`` for ``N > 1``.  Leave ``N == 1`` unchanged so
+    the engine's warmup dummy run (``num_inference_steps=1``) still works.
+    """
+    if bagel_num_timesteps > 1:
+        return bagel_num_timesteps - 1
+    return bagel_num_timesteps
+
+
 def setup_bagel_sigmas(
     scheduler: FlowMatchSDEDiscreteScheduler,
     num_steps: int,
@@ -59,10 +71,13 @@ def setup_bagel_sigmas(
 
     Returns the sigma list (dropping the terminal zero) for reference.
     """
-    if num_steps <= 1:
-        raise ValueError(f"num_steps must be > 1 for BAGEL denoising, got {num_steps}")
+    if num_steps <= 0:
+        raise ValueError(f"num_steps must be positive, got {num_steps}")
 
-    t = torch.linspace(1, 0, num_steps, dtype=torch.float32, device=device or "cpu")
+    # ``linspace(1, 0, 1)`` has no interior point after ``[:-1]``; use 2 points
+    # so warmup dummy runs (``num_inference_steps=1``) still get one sigma.
+    schedule_points = max(num_steps, 2)
+    t = torch.linspace(1, 0, schedule_points, dtype=torch.float32, device=device or "cpu")
     t_shifted = bagel_time_shift(shift, t)
     sigmas = t_shifted[:-1].tolist()
 
