@@ -10,11 +10,7 @@ for the integration architecture.
 
 ## Prerequisites
 
-- Install VeRL-Omni (see [docs/start/install.md](../../docs/start/install.md)) plus the OCR reward dependency:
-
-  ```bash
-  pip install Levenshtein
-  ```
+- Install VeRL-Omni (see [docs/start/install.md](../../docs/start/install.md)).
 
 - 4 GPUs.  Run commands from the repository root.
 
@@ -26,18 +22,29 @@ for the integration architecture.
 
 ## Prepare the dataset
 
-We use the same [OCR dataset](https://github.com/yifan123/flow_grpo/tree/main/dataset/ocr) as the Qwen-Image example.  BAGEL requires its own tokenisation (``<|im_start|>`` / ``<|im_end|>`` wrapping, no chat template):
+We use the same [PickScore dataset](https://github.com/yuvalkirstain/PickScore)
+as the official flow_grpo BAGEL config.  Prompts are stored in standard
+chat-message format — the BAGEL tokenizer (used by the agent loop) produces
+the correct BAGEL-format token IDs automatically.
+
+First, copy the raw prompt files from the flow_grpo repo:
+
+```bash
+cp ~/gitlocal/flow_grpo/dataset/pickscore/train.txt ~/data/pickscore/
+cp ~/gitlocal/flow_grpo/dataset/pickscore/test.txt ~/data/pickscore/
+```
+
+Then preprocess them into parquet:
 
 ```bash
 export WORKSPACE=${WORKSPACE:-$HOME}
 
-python3 examples/flowgrpo_trainer/data_process/bagel_ocr.py \
-  --model_path ~/models/ByteDance-Seed/BAGEL-7B-MoT \
-  --input_dir $WORKSPACE/data/ocr \
-  --output_dir $WORKSPACE/data/ocr/bagel
+python3 examples/flowgrpo_trainer/data_process/bagel_pickscore.py \
+  --input_dir $WORKSPACE/data/pickscore \
+  --output_dir $WORKSPACE/data/pickscore/bagel
 ```
 
-This produces ``$WORKSPACE/data/ocr/bagel/train.parquet`` and
+This produces ``$WORKSPACE/data/pickscore/bagel/train.parquet`` and
 ``test.parquet``.
 
 ## Run training

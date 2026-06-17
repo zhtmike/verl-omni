@@ -1,35 +1,36 @@
+#!/bin/bash
 # Bagel LoRA RL, vllm_omni rollout (FlowGRPO)
 #
-# Prerequisite: preprocess the OCR dataset for BAGEL:
-#   python examples/flowgrpo_trainer/data_process/bagel_ocr.py \
-#       --model_path ~/models/ByteDance-Seed/BAGEL-7B-MoT \
-#       --input_dir ~/data/ocr \
-#       --output_dir ~/data/ocr/bagel
+# Aligned with official flow_grpo pickscore_bagel_lora config (8-GPU),
+# linearly scaled to 4 GPUs.  Uses the same PickScore dataset as the
+# official repo.
+#
+# Prerequisite (one-time):
+#   cp ~/gitlocal/flow_grpo/dataset/pickscore/train.txt ~/data/pickscore/
+#   cp ~/gitlocal/flow_grpo/dataset/pickscore/test.txt ~/data/pickscore/
+#   python examples/flowgrpo_trainer/data_process/bagel_pickscore.py
 set -x
 
 # Set WORKSPACE to any writable directory; defaults to $HOME
 WORKSPACE=${WORKSPACE:-$HOME}
 
-ocr_train_path=$WORKSPACE/data/ocr/bagel/train.parquet
-ocr_test_path=$WORKSPACE/data/ocr/bagel/test.parquet
+train_path=$WORKSPACE/data/pickscore/bagel/train.parquet
+test_path=$WORKSPACE/data/pickscore/bagel/test.parquet
 
 BAGEL_DEPLOY_CONFIG=${BAGEL_DEPLOY_CONFIG:-"$(dirname "$0")/bagel_deploy_config.yaml"}
 
 model_name=~/models/ByteDance-Seed/BAGEL-7B-MoT
-reward_model_name=Qwen/Qwen3-VL-8B-Instruct
-reward_function_path=verl_omni/utils/reward_score/genrm_ocr.py
+custom_reward_function_path=verl_omni/utils/reward_score/pickscore_reward.py
 
 NUM_GPUS_ACTOR_ROLLOUT_REWARD=4
 ROLLOUT_TP=1
-REWARD_TP=4
 
 ENGINE=vllm_omni
-REWARD_ENGINE=vllm
 
 
 python3 -m verl_omni.trainer.main_diffusion \
-    data.train_files=$ocr_train_path \
-    data.val_files=$ocr_test_path \
+    data.train_files=$train_path \
+    data.val_files=$test_path \
     data.train_batch_size=32 \
     data.max_prompt_length=256 \
     data.trust_remote_code=True \
@@ -50,7 +51,7 @@ python3 -m verl_omni.trainer.main_diffusion \
     actor_rollout_ref.actor.fsdp_config.param_offload=True \
     actor_rollout_ref.actor.fsdp_config.optimizer_offload=True \
     actor_rollout_ref.actor.fsdp_config.model_dtype=bfloat16 \
-    actor_rollout_ref.actor.diffusion_loss.clip_ratio=1e-4 \
+    actor_rollout_ref.actor.diffusion_loss.clip_ratio=1e-5 \
     actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu=32 \
     actor_rollout_ref.rollout.tensor_model_parallel_size=$ROLLOUT_TP \
     actor_rollout_ref.rollout.name=$ENGINE \
@@ -60,7 +61,7 @@ python3 -m verl_omni.trainer.main_diffusion \
     actor_rollout_ref.rollout.layered_summon=True \
     actor_rollout_ref.rollout.pipeline.num_inference_steps=15 \
     actor_rollout_ref.rollout.pipeline.max_sequence_length=256 \
-    actor_rollout_ref.rollout.algo.noise_level=0.7 \
+    actor_rollout_ref.rollout.algo.noise_level=1.3 \
     actor_rollout_ref.rollout.algo.sde_type="sde" \
     actor_rollout_ref.rollout.algo.sde_window_size=2 \
     actor_rollout_ref.rollout.algo.sde_window_range="[0,7]" \
@@ -68,16 +69,13 @@ python3 -m verl_omni.trainer.main_diffusion \
     actor_rollout_ref.rollout.val_kwargs.algo.noise_level=0.0 \
     +actor_rollout_ref.rollout.engine_kwargs.vllm_omni.deploy_config=$BAGEL_DEPLOY_CONFIG \
     actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=32 \
-    reward.num_workers=$((NUM_GPUS_ACTOR_ROLLOUT_REWARD / REWARD_TP)) \
-    reward.reward_model.enable=True \
-    reward.reward_model.model_path=$reward_model_name \
-    reward.reward_model.rollout.name=$REWARD_ENGINE \
-    reward.reward_model.rollout.tensor_model_parallel_size=$REWARD_TP \
-    reward.custom_reward_function.path=$reward_function_path \
-    reward.custom_reward_function.name=compute_score_ocr \
+    reward.num_workers=1 \
+    reward.reward_model.enable=False \
+    reward.custom_reward_function.path=$custom_reward_function_path \
+    reward.custom_reward_function.name=compute_score \
     trainer.logger='["console", "wandb"]' \
     trainer.project_name=flow_grpo \
-    trainer.experiment_name=bagel_ocr_lora \
+    trainer.experiment_name=bagel_pickscore_lora \
     trainer.log_val_generations=8 \
     trainer.val_before_train=False \
     trainer.n_gpus_per_node=$NUM_GPUS_ACTOR_ROLLOUT_REWARD \
@@ -85,4 +83,4 @@ python3 -m verl_omni.trainer.main_diffusion \
     trainer.save_freq=30 \
     trainer.test_freq=30 \
     trainer.total_epochs=15 \
-    trainer.total_training_steps=60 "$@"
+    trainer.total_training_steps=300 "$@"

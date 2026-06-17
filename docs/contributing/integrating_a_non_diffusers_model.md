@@ -365,18 +365,18 @@ The data preprocessor for non-diffusers models must match the tokenisation
 used by the upstream pipeline **and** produce the token-ID format that the
 training adapter expects.
 
-BAGEL's preprocessor (`examples/flowgrpo_trainer/data_process/bagel_ocr.py`)
+BAGEL's preprocessor (`examples/flowgrpo_trainer/data_process/bagel_pickscore.py`)
 does the following:
 
-1. Loads the BAGEL tokenizer from the model checkpoint.
-2. Constructs the user prompt text (system prompt + OCR text).
-3. Tokenizes in BAGEL native format:
-   `<|im_start|>` + `tokenizer.encode(user_text)` + `<|im_end|>`.
-4. Stores the token IDs as `bagel_prompt_ids` (an `np.ndarray` of `int64`).
+1. Reads raw prompt text from one-caption-per-line files.
+2. Stores prompts in the standard chat-message format (``prompt`` key).
+3. Adds per-sample metadata (reward ground-truth, data source, etc.).
 
-The training adapter reads `micro_batch["bagel_prompt_ids"]` directly —
-no runtime tokenisation. This design avoids the decode→re-encode round-trip
-that would otherwise be needed if the training adapter received text strings.
+The training adapter reads ``micro_batch["prompts"]`` and
+``micro_batch["attention_mask"]`` — the standard padded token-ID tensors
+that already flow through the TensorDict pipeline from the agent loop.
+No separate token-ID field is needed; the agent loop's tokenizer (the
+BAGEL tokenizer) produces the correct BAGEL-format IDs automatically.
 
 ---
 
@@ -385,8 +385,8 @@ that would otherwise be needed if the training adapter received text strings.
 Follow the same pattern as the diffusers guide (Step 6 of
 {doc}`integrating_a_diffusion_model`), but with these additions:
 
-1. The dummy data must include the token-ID field (e.g. `bagel_prompt_ids`)
-   that the training adapter expects.
+1. The dummy data must include the ``prompts`` tensor and ``attention_mask``
+   tensor (already part of the standard batch; no extra field required).
 2. The architecture override must be passed explicitly:
    `+actor_rollout_ref.model.architecture=OmniMyModelForConditionalGeneration`.
 
@@ -413,7 +413,8 @@ checklist to verify your implementation against it:
 - [ ] `@DiffusionModelBase.register("OmniBagelForConditionalGeneration", algorithm="flow_grpo")`
 - [ ] `build_module()` returns `BagelForTraining.from_pretrained(...)`
 - [ ] `build_scheduler()` and `set_timesteps()` with shifted sigmas
-- [ ] `prepare_model_inputs()` reads `bagel_prompt_ids` from micro-batch
+- [ ] `prepare_model_inputs()` reads ``prompts`` and ``attention_mask``
+      from micro-batch (standard tensors, no extra field needed)
 - [ ] `forward_and_sample_previous_step()` with 3-branch CFG combining
 
 ### Rollout adapter (`vllm_omni_rollout_adapter.py`)
@@ -428,10 +429,9 @@ checklist to verify your implementation against it:
 - [ ] `bagel_time_shift()` — SD3-style timestep shift of `3.0`
 - [ ] CFG defaults (`BAGEL_FLOWGRPO_CFG_DEFAULTS`) — consistent between adapters
 
-### Data preprocessor (`bagel_ocr.py`)
-- [ ] Tokenizes prompts in BAGEL native format (`<|im_start|>` + encode + `<|im_end|>`)
-- [ ] Stores token IDs as `bagel_prompt_ids` (`np.ndarray` of `int64`)
-- [ ] Matches the upstream `BagelPipeline.prepare_prompts()` tokenisation exactly
+### Data preprocessor (e.g. ``bagel_pickscore.py``)
+- [ ] Stores prompts in standard chat-message format (``prompt`` key);
+      no separate token-ID field needed
 
 ### Wiring
 - [ ] `verl_omni/pipelines/bagel_flow_grpo/__init__.py` re-exports all three classes
@@ -448,10 +448,9 @@ checklist to verify your implementation against it:
 **Symptom**: Reward collapse, poor image quality, or CFG producing blank
 images.
 
-**Root cause**: The data preprocessor's tokenization (e.g. `bagel_ocr.py`
-wrapping with `<|im_start|>` / `<|im_end|>`) differs from what the upstream
-vllm-omni pipeline does internally (e.g. `prepare_prompts` may add or strip
-markers).
+**Root cause**: The data preprocessor's tokenization differs from what the upstream
+vllm-omni pipeline does internally (e.g. custom BOS/EOS wrapping vs
+``apply_chat_template``).
 
 **Fix**: Read the upstream pipeline's prompt preparation code carefully and
 ensure your preprocessor produces token sequences that would result in

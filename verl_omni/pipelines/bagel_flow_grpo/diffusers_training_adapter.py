@@ -74,32 +74,6 @@ class BagelDiffusion(DiffusionModelBase):
         pos_ids = get_flattened_position_ids(H_px, W_px, latent_ds, config.max_latent_size)
         return pos_ids.to(device)
 
-    @staticmethod
-    def _bagel_ids_to_batch(
-        bagel_prompt_ids: list,
-        device: torch.device,
-    ) -> tuple[torch.Tensor, torch.Tensor]:
-        """Pad variable-length BAGEL token ID lists into a uniform batch.
-
-        Args:
-            bagel_prompt_ids: List of ``np.ndarray`` or ``list[int]``,
-                one per sample, already in BAGEL format.
-            device: Target device.
-
-        Returns:
-            ``(text_token_ids, text_attention_mask)`` — padded tensors
-            of shape ``(B, max_len)``.
-        """
-        B = len(bagel_prompt_ids)
-        max_len = max(len(ids) for ids in bagel_prompt_ids)
-        text_token_ids = torch.zeros(B, max_len, dtype=torch.long, device=device)
-        text_attention_mask = torch.zeros(B, max_len, dtype=torch.bool, device=device)
-        for i, ids in enumerate(bagel_prompt_ids):
-            n = len(ids)
-            text_token_ids[i, :n] = torch.as_tensor(ids, dtype=torch.long, device=device)
-            text_attention_mask[i, :n] = True
-        return text_token_ids, text_attention_mask
-
     @classmethod
     def prepare_model_inputs(
         cls,
@@ -120,9 +94,8 @@ class BagelDiffusion(DiffusionModelBase):
         hidden_states = latents[:, step]
         timestep = timesteps[:, step]
 
-        # Read pre-tokenized BAGEL prompt IDs from the data pipeline
-        # (produced by examples/flowgrpo_trainer/data_process/bagel_ocr.py).
-        text_token_ids, text_attention_mask = cls._bagel_ids_to_batch(micro_batch["bagel_prompt_ids"], device)
+        text_token_ids = micro_batch["prompts"].to(device)
+        text_attention_mask = micro_batch["attention_mask"].to(device).bool()
 
         # Compute latent position IDs
         latent_pos_ids = cls._get_latent_pos_ids(model_config, module, device)
