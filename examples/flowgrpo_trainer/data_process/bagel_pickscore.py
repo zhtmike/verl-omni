@@ -10,11 +10,13 @@ Prompts are stored in standard chat-message format.  The BAGEL tokenizer
 (used by the agent loop and training adapter) produces the correct
 BAGEL-format token IDs automatically via the standard ``prompts`` tensor.
 
-The official PickScore dataset is already downloaded in the flow_grpo
-repository.  To prepare it::
+The official PickScore dataset is available from the flow_grpo repository.
+To prepare it::
 
-    cp ~/gitlocal/flow_grpo/dataset/pickscore/train.txt ~/data/pickscore/
-    cp ~/gitlocal/flow_grpo/dataset/pickscore/test.txt ~/data/pickscore/
+    wget -P ~/data/pickscore/ \
+      https://raw.githubusercontent.com/yifan123/flow_grpo/main/dataset/pickscore/train.txt
+    wget -P ~/data/pickscore/ \
+      https://raw.githubusercontent.com/yifan123/flow_grpo/main/dataset/pickscore/test.txt
     python examples/flowgrpo_trainer/data_process/bagel_pickscore.py
 
 If you have your own prompt dataset, place train.txt / test.txt in any
@@ -49,9 +51,11 @@ if __name__ == "__main__":
     if not os.path.exists(train_file) or not os.path.exists(test_file):
         raise FileNotFoundError(
             f"Expected raw text files at {train_file} and {test_file}. "
-            f"Copy them from the official flow_grpo repo:\n"
-            f"  cp ~/gitlocal/flow_grpo/dataset/pickscore/train.txt {local_dataset_path}/\n"
-            f"  cp ~/gitlocal/flow_grpo/dataset/pickscore/test.txt {local_dataset_path}/"
+            f"Download them from the flow_grpo repository:\n"
+            f"  wget -P {local_dataset_path} \\\n"
+            f"    https://raw.githubusercontent.com/yifan123/flow_grpo/main/dataset/pickscore/train.txt\n"
+            f"  wget -P {local_dataset_path} \\\n"
+            f"    https://raw.githubusercontent.com/yifan123/flow_grpo/main/dataset/pickscore/test.txt"
         )
     dataset = datasets.load_dataset("text", data_files={"train": train_file, "test": test_file})
     train_dataset = dataset["train"]

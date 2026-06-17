@@ -6,8 +6,10 @@
 # official repo.
 #
 # Prerequisite (one-time):
-#   cp ~/gitlocal/flow_grpo/dataset/pickscore/train.txt ~/data/pickscore/
-#   cp ~/gitlocal/flow_grpo/dataset/pickscore/test.txt ~/data/pickscore/
+#   wget -P ~/data/pickscore/ \
+#     https://raw.githubusercontent.com/yifan123/flow_grpo/main/dataset/pickscore/train.txt
+#   wget -P ~/data/pickscore/ \
+#     https://raw.githubusercontent.com/yifan123/flow_grpo/main/dataset/pickscore/test.txt
 #   python examples/flowgrpo_trainer/data_process/bagel_pickscore.py
 set -x
 

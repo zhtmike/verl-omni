@@ -27,11 +27,13 @@ as the official flow_grpo BAGEL config.  Prompts are stored in standard
 chat-message format — the BAGEL tokenizer (used by the agent loop) produces
 the correct BAGEL-format token IDs automatically.
 
-First, copy the raw prompt files from the flow_grpo repo:
+First, download the raw prompt files from the flow_grpo repository:
 
 ```bash
-cp ~/gitlocal/flow_grpo/dataset/pickscore/train.txt ~/data/pickscore/
-cp ~/gitlocal/flow_grpo/dataset/pickscore/test.txt ~/data/pickscore/
+wget -P ~/data/pickscore/ \
+  https://raw.githubusercontent.com/yifan123/flow_grpo/main/dataset/pickscore/train.txt
+wget -P ~/data/pickscore/ \
+  https://raw.githubusercontent.com/yifan123/flow_grpo/main/dataset/pickscore/test.txt
 ```
 
 Then preprocess them into parquet:
