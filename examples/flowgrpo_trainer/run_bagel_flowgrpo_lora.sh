@@ -39,7 +39,6 @@ python3 -m verl_omni.trainer.main_diffusion \
     algorithm.global_std=False \
     algorithm.rollout_correction.rollout_is=sequence \
     algorithm.rollout_correction.rollout_is_threshold=2.0 \
-    algorithm.rollout_correction.rollout_is_batch_normalize=True \
     actor_rollout_ref.model.path=$model_name \
     actor_rollout_ref.model.tokenizer_path=$model_name \
     +actor_rollout_ref.model.architecture=OmniBagelForConditionalGeneration \
