@@ -279,37 +279,22 @@ class BagelMoTAttention(nn.Module):
             k_normed = k_normed.unsqueeze(3).expand(-1, -1, -1, rep, -1).reshape(B, L, self.num_heads, self.head_dim)
             v = v.unsqueeze(3).expand(-1, -1, -1, rep, -1).reshape(B, L, self.num_heads, self.head_dim)
 
-        # Padded SDPA requires a key padding mask so that zero-padded text
-        # tokens don't leak into image-region attention (log_prob invariance).
+        # vLLM-Omni / BAGEL official: all tokens attend bidirectionally
+        # (is_causal=False) during the denoising forward pass.  Zero-padded
+        # text tokens in uneven micro-batches are masked via key_padding_mask.
         q_normed = q_normed.transpose(1, 2)  # (B, H, L, D)
         k_normed = k_normed.transpose(1, 2)
         v = v.transpose(1, 2)
 
-        if L_ctx > 0:
-            text_out = F.scaled_dot_product_attention(
-                q_normed[:, :, :L_ctx],
-                k_normed[:, :, :L_ctx],
-                v[:, :, :L_ctx],
-                is_causal=True,
+        if key_padding_mask is not None and not key_padding_mask.all():
+            attn_mask = key_padding_mask.view(B, 1, 1, L)
+            attn_out = F.scaled_dot_product_attention(
+                q_normed,
+                k_normed,
+                v,
+                attn_mask=attn_mask,
+                is_causal=False,
             )
-            if key_padding_mask is not None and not key_padding_mask.all():
-                # key_padding_mask: True = valid key, broadcast as (B,1,1,L).
-                img_attn_mask = key_padding_mask.view(B, 1, 1, L)
-                img_out = F.scaled_dot_product_attention(
-                    q_normed[:, :, L_ctx:],
-                    k_normed,
-                    v,
-                    attn_mask=img_attn_mask,
-                    is_causal=False,
-                )
-            else:
-                img_out = F.scaled_dot_product_attention(
-                    q_normed[:, :, L_ctx:],
-                    k_normed,
-                    v,
-                    is_causal=False,
-                )
-            attn_out = torch.cat([text_out, img_out], dim=2)
         else:
             attn_out = F.scaled_dot_product_attention(
                 q_normed,
@@ -560,7 +545,7 @@ class BagelForTraining(NonDiffusersModelBase):
         else:
             key_padding_mask = None
 
-        # 7. Transformer layers (split attention: text causal + image full)
+        # 7. Transformer layers (unified bidirectional attention — all tokens attend to all)
         for layer in self.layers:
 
             def _layer_fn(seq, cos_, sin_, text_mask_, latent_mask_, kpm, *, _layer=layer):
