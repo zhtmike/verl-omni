@@ -25,6 +25,22 @@ logger = logging.getLogger(__file__)
 logger.setLevel(os.getenv("VERL_LOGGING_LEVEL", "WARN"))
 
 
+def _to_token_id_list(token_ids: Any) -> list[int] | None:
+    if token_ids is None:
+        return None
+    if hasattr(token_ids, "detach"):
+        token_ids = token_ids.detach().cpu().tolist()
+    elif hasattr(token_ids, "tolist"):
+        token_ids = token_ids.tolist()
+    if isinstance(token_ids, tuple):
+        token_ids = list(token_ids)
+    if isinstance(token_ids, list) and len(token_ids) == 1 and isinstance(token_ids[0], list | tuple):
+        token_ids = list(token_ids[0])
+    if not isinstance(token_ids, list) or not token_ids:
+        return None
+    return [int(token_id) for token_id in token_ids]
+
+
 @register("diffusion_single_turn_agent")
 class DiffusionSingleTurnAgentLoop(AgentLoopBase):
     """Agent loop for diffusion model serving."""
@@ -49,13 +65,19 @@ class DiffusionSingleTurnAgentLoop(AgentLoopBase):
         images = multi_modal_data.get("images")
         videos = multi_modal_data.get("videos")
 
-        # 2. apply chat template and tokenize
-        prompt_ids = await self.apply_chat_template(raw_prompt, images=images, videos=videos)
+        # 2. Prefer dataset-supplied prompt ids when available. BAGEL stores
+        # prepare_prompts-style ids in parquet; re-tokenizing through a chat
+        # template makes rollout diverge from training-side log-prob recompute.
+        prompt_ids = _to_token_id_list(kwargs.get("prompt_token_ids"))
+        used_precomputed_prompt_ids = prompt_ids is not None
+        if prompt_ids is None:
+            prompt_ids = await self.apply_chat_template(raw_prompt, images=images, videos=videos)
 
-        if raw_negative_prompt is not None:
+        negative_prompt_ids = _to_token_id_list(kwargs.get("negative_prompt_token_ids"))
+        if negative_prompt_ids is None:
+            negative_prompt_ids = _to_token_id_list(kwargs.get("negative_prompt_ids"))
+        if negative_prompt_ids is None and raw_negative_prompt is not None and not used_precomputed_prompt_ids:
             negative_prompt_ids = await self.apply_chat_template(raw_negative_prompt, images=images, videos=videos)
-        else:
-            negative_prompt_ids = None
 
         # 3. generate sequences
         metrics = {}

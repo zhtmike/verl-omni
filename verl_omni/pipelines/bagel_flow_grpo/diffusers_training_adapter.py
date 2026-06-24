@@ -87,6 +87,41 @@ class BagelDiffusion(DiffusionModelBase):
         return BagelForTraining.from_pretrained(model_config.local_path, torch_dtype=torch_dtype)
 
     @classmethod
+    def configure_train_mode(cls, module):
+        """Force BAGEL sub-modules to eval mode during training.
+
+        Matches official flow_grpo (train_bagel.py L808-819):
+        ``transformer.train()`` for FSDP gradient tracking, then
+        all MoE/LLM sub-layers forced to ``training=False`` for
+        deterministic routing during forward passes.
+
+        Without this, ``module.train()`` enables MoE router jitter
+        → different expert selection per forward → noisy ratio.
+        """
+        inner = module
+        try:
+            if hasattr(inner, "module"):
+                inner = inner.module
+            if not hasattr(inner, "layers"):
+                return
+            inner.training = False
+            for layer in inner.layers:
+                if hasattr(layer, "module"):
+                    layer_inner = layer.module
+                else:
+                    layer_inner = layer
+                if hasattr(layer_inner, "training"):
+                    layer_inner.training = False
+                if hasattr(layer_inner, "self_attn") and hasattr(layer_inner.self_attn, "training"):
+                    layer_inner.self_attn.training = False
+            logger.info(
+                "BAGEL train_mode: set %d layers + self_attn to eval (matching official flow_grpo).",
+                len(inner.layers),
+            )
+        except Exception:
+            pass
+
+    @classmethod
     def build_scheduler(cls, model_config: DiffusionModelConfig):
         # Build on GPU so scheduler buffers are comparable with cuda timesteps in FSDP forward.
         scheduler = FlowMatchSDEDiscreteScheduler()

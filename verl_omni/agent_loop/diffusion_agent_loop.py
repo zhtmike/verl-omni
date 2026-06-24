@@ -230,10 +230,15 @@ class DiffusionAgentLoopWorker:
 
         extra_fields["raw_prompt"] = kwargs["raw_prompt"]
 
+        # Truncate to max prompt length before padding, otherwise tokenizer.pad
+        # keeps overlong sequences at their original length, causing a size
+        # mismatch in _postprocess when concatenating prompt_ids across samples.
+        max_len = self.rollout_config.prompt_length
+        truncated_ids = output.prompt_ids[:max_len]
         prompt_output = self.tokenizer.pad(
-            {"input_ids": output.prompt_ids},
+            {"input_ids": truncated_ids},
             padding="max_length",
-            max_length=self.rollout_config.prompt_length,
+            max_length=max_len,
             return_tensors="pt",
             return_attention_mask=True,
         )

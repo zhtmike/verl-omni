@@ -108,8 +108,8 @@ class NonDiffusersModelBase(nn.Module, ABC):
         self.gradient_checkpointing = True
 
     def _checkpointed_call(self, fn, *args, **ckpt_kwargs):
-        """Call *fn*, wrapping with checkpoint when enabled and training."""
-        if not self.gradient_checkpointing or not self.training:
+        """Call *fn*, wrapping with checkpoint when enabled and grad is required."""
+        if not self.gradient_checkpointing or not torch.is_grad_enabled():
             return fn(*args)
 
         ckpt_kwargs.setdefault("use_reentrant", False)

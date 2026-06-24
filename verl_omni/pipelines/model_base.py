@@ -89,6 +89,15 @@ class DiffusionModelBase(ABC):
             ) from None
 
     @classmethod
+    def configure_train_mode(cls, module: torch.nn.Module) -> None:
+        """Hook called after ``module.train()`` to allow architecture-specific overrides.
+
+        Override to set sub-modules to eval mode for deterministic behaviour
+        during gradient computation (e.g. BAGEL MoE routing).
+        """
+        return
+
+    @classmethod
     def build_module(cls, model_config: DiffusionModelConfig, torch_dtype: torch.dtype) -> Optional[torch.nn.Module]:
         """Load the model without ``diffusers.AutoModel``.
 
