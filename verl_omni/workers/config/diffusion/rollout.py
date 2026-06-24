@@ -46,7 +46,7 @@ class DiffusionRolloutAlgoConfig(BaseConfig):
     # MixGRPO-only configs
     sample_strategy: str = "random"
     iters_per_group: int = 1
-    sde_window_seed: int = 0
+    sde_window_seed: Optional[int] = None
 
     def __post_init__(self):
         if self.sample_strategy not in ("random", "progressive"):

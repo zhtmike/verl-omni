@@ -275,7 +275,7 @@ actor_rollout_ref:
       sde_window_range: null
       sample_strategy: random
       iters_per_group: 1
-      sde_window_seed: 0
+      sde_window_seed: null
     pipeline:
       _target_: verl_omni.workers.config.diffusion.DiffusionPipelineConfig
       height: 512
