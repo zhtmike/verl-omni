@@ -20,11 +20,13 @@ environment, runtime target, and result.
 
 - Log: `train_bagel_flowgrpo.log`
 - Branch: `bagel_debug`
-- Latest commit: `d5724d0 fix`
-- Observed progress: at least 9 training steps completed.
-- Per-step runtime: about 511-521 seconds.
-- Primary implication: a full training step is near the 10 minute limit, so
-  probes should use tiny batches and fixed seeds.
+- Latest parity commit: `0206ef6 fix: align BAGEL FlowGRPO parity`
+- Latest rerun observed: step 1 completed after relaunching with
+  `sde_window_seed: None`.
+- Per-step runtime: about 472 seconds for the first completed update.
+- Primary implication: the current real training run looks healthy after the
+  SDE-window default fix; strict parity probes should still use tiny batches
+  and fixed seeds.
 
 ## Static Parity Matrix
 
@@ -530,3 +532,38 @@ Conclusion:
 - Stop further parity patching here unless a longer training run shows a
   practical instability. The next useful validation is a short real training
   smoke run with the strict-aligned config, not more one-step internals work.
+
+## 2026-06-24 Real Training Rerun Handoff
+
+Context:
+
+- After the parity commit (`0206ef6`), the normal BAGEL rollout config was
+  changed so `sde_window_seed` defaults to `null` / `None` instead of `0`.
+- This matters for `_pick_strategy_sde_window`: `sde_window_seed=0` made SDE
+  window selection deterministic by global step, while `None` restores the
+  per-request/random behavior expected for ordinary training runs.
+- The user relaunched the real training job in `train_bagel_flowgrpo.log`.
+  The resolved config confirms `'sde_window_seed': None`.
+
+Observed first completed update:
+
+- `training/global_step=1`
+- `critic/rewards/mean=0.7739937901496887`
+- `critic/rewards/max=0.9798278212547302`
+- `critic/rewards/min=0.5089152455329895`
+- `actor/ppo_kl=7.073622209219366e-05`
+- `actor/ratio_mean=0.9999293088912964`
+- `actor/grad_norm=0.0002741813659667969`
+- `timing_s/step=471.7991578609217`
+
+Interpretation for tomorrow:
+
+- The low initial reward seen before the rerun was most likely caused by the
+  old `sde_window_seed=0` default, not by the log-prob normalizer fix or the
+  asymmetric attention-mask change.
+- Restoring `sde_window_seed=null` brought the first-step reward back to the
+  expected high range and kept the actor update small (`ppo_kl ~7e-5`,
+  `ratio_mean ~0.99993`).
+- This is a good run to let continue. If reward later drops, first inspect the
+  W&B reward curve, SDE-window sampling distribution, and generated samples
+  before doing more parity patching.
