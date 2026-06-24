@@ -279,15 +279,30 @@ class BagelMoTAttention(nn.Module):
             k_normed = k_normed.unsqueeze(3).expand(-1, -1, -1, rep, -1).reshape(B, L, self.num_heads, self.head_dim)
             v = v.unsqueeze(3).expand(-1, -1, -1, rep, -1).reshape(B, L, self.num_heads, self.head_dim)
 
-        # vLLM-Omni / BAGEL official: all tokens attend bidirectionally
-        # (is_causal=False) during the denoising forward pass.  Zero-padded
-        # text tokens in uneven micro-batches are masked via key_padding_mask.
+        # vLLM-Omni/BAGEL rollout precomputes prompt text into a causal KV
+        # cache, then runs denoising over image markers + latent tokens.  Keep
+        # prompt-token queries causal/text-only here so prompt states do not
+        # absorb latent information across layers, while image queries still
+        # attend bidirectionally to prompt + image tokens.
         q_normed = q_normed.transpose(1, 2)  # (B, H, L, D)
         k_normed = k_normed.transpose(1, 2)
         v = v.transpose(1, 2)
 
-        if key_padding_mask is not None and not key_padding_mask.all():
+        attn_mask = None
+        if L_ctx > 0:
+            query_pos = torch.arange(L, device=hidden_states.device).view(L, 1)
+            key_pos = torch.arange(L, device=hidden_states.device).view(1, L)
+            allowed = torch.ones(B, L, L, dtype=torch.bool, device=hidden_states.device)
+            prompt_causal = key_pos[:L_ctx, :L_ctx] <= query_pos[:L_ctx, :L_ctx]
+            allowed[:, :L_ctx, :] = False
+            allowed[:, :L_ctx, :L_ctx] = prompt_causal
+            if key_padding_mask is not None and not key_padding_mask.all():
+                allowed = allowed & key_padding_mask.view(B, 1, L)
+            attn_mask = allowed.view(B, 1, L, L)
+        elif key_padding_mask is not None and not key_padding_mask.all():
             attn_mask = key_padding_mask.view(B, 1, 1, L)
+
+        if attn_mask is not None:
             attn_out = F.scaled_dot_product_attention(
                 q_normed,
                 k_normed,

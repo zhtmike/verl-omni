@@ -75,6 +75,30 @@ from verl_omni.workers.utils.padding import embeds_padding_2_no_padding
 sys_logger = logging.getLogger(__name__)
 
 
+def _parity_dump(record: dict) -> None:
+    dump_dir = os.environ.get("BAGEL_PARITY_DUMP_DIR")
+    if not dump_dir:
+        return
+    os.makedirs(dump_dir, exist_ok=True)
+    payload = {"side": "verl", "rank": "driver", "pid": os.getpid(), **record}
+    with open(os.path.join(dump_dir, "verl_driver.jsonl"), "a", encoding="utf-8") as f:
+        f.write(json.dumps(payload, sort_keys=True) + "\n")
+
+
+def _parity_jsonable_metrics(metrics: dict) -> dict:
+    out = {}
+    for key, value in metrics.items():
+        if hasattr(value, "value"):
+            value = value.value
+        if isinstance(value, np.generic):
+            value = value.item()
+        if isinstance(value, torch.Tensor) and value.numel() == 1:
+            value = value.detach().cpu().item()
+        if isinstance(value, int | float | str | bool) or value is None:
+            out[key] = value
+    return out
+
+
 def compute_advantage(
     data: DataProto,
     adv_estimator: str,
@@ -822,6 +846,7 @@ class BaseRayDiffusionTrainer(ABC):
         actor_output = rename_dict(actor_output, "actor/")
         if (actor_mfu := actor_output.pop("actor/mfu", None)) is not None:
             actor_output["perf/mfu/actor"] = actor_mfu
+        _parity_dump({"event": "actor_metrics", "metrics": _parity_jsonable_metrics(actor_output)})
         return DataProto.from_single_dict(data={}, meta_info={"metrics": actor_output})
 
     def _start_profiling(self, do_profile: bool) -> None:

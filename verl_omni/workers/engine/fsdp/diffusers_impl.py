@@ -75,6 +75,41 @@ logger.setLevel(os.getenv("VERL_LOGGING_LEVEL", "WARN"))
 device_name = get_device_name()
 
 
+def _parity_tensor_summary(value, limit: int = 8):
+    if value is None:
+        return None
+    if not isinstance(value, torch.Tensor):
+        return value
+    detached = value.detach().float().cpu()
+    flat = detached.reshape(-1)
+    summary = {
+        "shape": list(value.shape),
+        "dtype": str(value.dtype),
+        "values": flat[:limit].tolist(),
+    }
+    if flat.numel() > 0:
+        summary.update(
+            {
+                "mean": float(flat.mean().item()),
+                "std": float(flat.std(unbiased=False).item()),
+                "min": float(flat.min().item()),
+                "max": float(flat.max().item()),
+            }
+        )
+    return summary
+
+
+def _parity_dump(record: dict) -> None:
+    dump_dir = os.environ.get("BAGEL_PARITY_DUMP_DIR")
+    if not dump_dir:
+        return
+    os.makedirs(dump_dir, exist_ok=True)
+    rank = int(os.environ.get("RANK", os.environ.get("LOCAL_RANK", "0")))
+    payload = {"side": "verl", "rank": rank, "pid": os.getpid(), **record}
+    with open(os.path.join(dump_dir, f"verl_train_rank{rank}_pid{os.getpid()}.jsonl"), "a", encoding="utf-8") as f:
+        f.write(json.dumps(payload, sort_keys=True) + "\n")
+
+
 class DiffusersFSDPEngine(LoRAAdapterMixin, BaseEngine, ABC):
     """Base Diffusers engine using PyTorch FullyShardedDataParallel (FSDP).
 
@@ -916,6 +951,28 @@ class PPODiffusersFSDPEngine(DiffusersFSDPEngine):
                 data["rollout_is_weights"] = micro_batch["rollout_is_weights"][:, step]
 
             loss, metrics = loss_function(model_output=model_output, data=data, dp_group=self.get_data_parallel_group())
+            ratio = None
+            if "log_probs" in model_output and "old_log_probs" in data:
+                ratio = torch.exp(model_output["log_probs"] - data["old_log_probs"])
+            _parity_dump(
+                {
+                    "event": "train_step",
+                    "step": int(step),
+                    "old_log_probs": _parity_tensor_summary(data.get("old_log_probs")),
+                    "new_log_probs": _parity_tensor_summary(model_output.get("log_probs")),
+                    "ratio": _parity_tensor_summary(ratio),
+                    "advantages": _parity_tensor_summary(data.get("advantages")),
+                    "prev_sample_mean": _parity_tensor_summary(model_output.get("prev_sample_mean"), limit=4),
+                    "std_dev_t": _parity_tensor_summary(model_output.get("std_dev_t")),
+                    "sqrt_dt": _parity_tensor_summary(model_output.get("sqrt_dt")),
+                    "loss": float(loss.detach().float().cpu().item()),
+                    "metrics": {
+                        key: float(value.value if hasattr(value, "value") else value)
+                        for key, value in metrics.items()
+                        if isinstance(value.value if hasattr(value, "value") else value, int | float)
+                    },
+                }
+            )
         else:
             assert forward_only, "forward_only must be True when loss_function is None"
             loss = torch.tensor(1.0, device=device_name)

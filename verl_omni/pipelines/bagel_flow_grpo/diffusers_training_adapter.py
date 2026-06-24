@@ -22,7 +22,9 @@ renormalization matching the rollout pipeline exactly.
 
 from __future__ import annotations
 
+import json
 import logging
+import os
 from typing import Optional
 
 import torch
@@ -39,6 +41,43 @@ from .bagel_model import BagelForTraining, get_flattened_position_ids
 from .common import BAGEL_FLOWGRPO_CFG_DEFAULTS, setup_bagel_sigmas
 
 logger = logging.getLogger(__name__)
+
+
+def _parity_tensor_summary(value, limit: int = 8):
+    if value is None:
+        return None
+    if not isinstance(value, torch.Tensor):
+        return value
+    detached = value.detach().float().cpu()
+    flat = detached.reshape(-1)
+    summary = {
+        "shape": list(value.shape),
+        "dtype": str(value.dtype),
+        "values": flat[:limit].tolist(),
+    }
+    if flat.numel() > 0:
+        summary.update(
+            {
+                "mean": float(flat.mean().item()),
+                "std": float(flat.std(unbiased=False).item()),
+                "min": float(flat.min().item()),
+                "max": float(flat.max().item()),
+            }
+        )
+    return summary
+
+
+def _parity_dump(record: dict) -> None:
+    dump_dir = os.environ.get("BAGEL_PARITY_DUMP_DIR")
+    if not dump_dir:
+        return
+    os.makedirs(dump_dir, exist_ok=True)
+    rank = int(os.environ.get("RANK", os.environ.get("LOCAL_RANK", "0")))
+    payload = {"side": "verl", "rank": rank, "pid": os.getpid(), **record}
+    with open(
+        os.path.join(dump_dir, f"verl_train_detail_rank{rank}_pid{os.getpid()}.jsonl"), "a", encoding="utf-8"
+    ) as f:
+        f.write(json.dumps(payload, sort_keys=True) + "\n")
 
 
 # BAGEL workaround: chat-template batch["prompts"] ≠ prepare_prompts; use
@@ -297,6 +336,8 @@ class BagelDiffusion(DiffusionModelBase):
 
         # Gen branch (text-conditional).
         noise_pred = module(**model_inputs)[0]
+        raw_noise_pred = noise_pred
+        cfg_text_pred = None
 
         # Apply BAGEL CFG matching rollout so importance-sampling ratio
         # is unbiased. Rollout always uses cfg_text_scale=4.0 + global renorm.
@@ -336,5 +377,27 @@ class BagelDiffusion(DiffusionModelBase):
             sde_type=model_config.algo.sde_type,
             return_logprobs=True,
             return_sqrt_dt=True,
+            include_logprob_normalizer=False,
+        )
+        _parity_dump(
+            {
+                "event": "train_detail",
+                "step": int(step),
+                "sigma": float(timesteps[0, step].detach().float().cpu().item()),
+                "apply_cfg": bool(apply_cfg),
+                "cfg": cfg,
+                "text_token_ids": _parity_tensor_summary(model_inputs.get("text_token_ids")),
+                "text_attention_mask": _parity_tensor_summary(model_inputs.get("text_attention_mask")),
+                "latent_pos_ids": _parity_tensor_summary(model_inputs.get("latent_pos_ids")),
+                "sample": _parity_tensor_summary(latents[:, step].float(), limit=4),
+                "prev_sample": _parity_tensor_summary(latents[:, step + 1].float(), limit=4),
+                "raw_noise_pred": _parity_tensor_summary(raw_noise_pred, limit=4),
+                "cfg_text_pred": _parity_tensor_summary(cfg_text_pred, limit=4),
+                "noise_pred": _parity_tensor_summary(noise_pred, limit=4),
+                "prev_sample_mean": _parity_tensor_summary(prev_sample_mean, limit=4),
+                "std_dev_t": _parity_tensor_summary(std_dev_t),
+                "sqrt_dt": _parity_tensor_summary(sqrt_dt),
+                "log_prob": _parity_tensor_summary(log_prob),
+            }
         )
         return log_prob, prev_sample_mean, std_dev_t, sqrt_dt

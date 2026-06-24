@@ -22,7 +22,9 @@ original flow_grpo BAGEL rollout.
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
+import os
 import random
 from dataclasses import dataclass
 from typing import Any, Optional
@@ -42,6 +44,41 @@ from verl_omni.pipelines.model_base import VllmOmniPipelineBase
 from verl_omni.pipelines.schedulers import FlowMatchSDEDiscreteScheduler
 
 logger = logging.getLogger(__name__)
+
+
+def _parity_tensor_summary(value, limit: int = 8):
+    if value is None:
+        return None
+    if not isinstance(value, torch.Tensor):
+        return value
+    detached = value.detach().float().cpu()
+    flat = detached.reshape(-1)
+    summary = {
+        "shape": list(value.shape),
+        "dtype": str(value.dtype),
+        "values": flat[:limit].tolist(),
+    }
+    if flat.numel() > 0:
+        summary.update(
+            {
+                "mean": float(flat.mean().item()),
+                "std": float(flat.std(unbiased=False).item()),
+                "min": float(flat.min().item()),
+                "max": float(flat.max().item()),
+            }
+        )
+    return summary
+
+
+def _parity_dump(record: dict) -> None:
+    dump_dir = os.environ.get("BAGEL_PARITY_DUMP_DIR")
+    if not dump_dir:
+        return
+    os.makedirs(dump_dir, exist_ok=True)
+    rank = int(os.environ.get("RANK", os.environ.get("LOCAL_RANK", "0")))
+    payload = {"side": "verl", "rank": rank, "pid": os.getpid(), **record}
+    with open(os.path.join(dump_dir, f"verl_rollout_rank{rank}_pid{os.getpid()}.jsonl"), "a", encoding="utf-8") as f:
+        f.write(json.dumps(payload, sort_keys=True) + "\n")
 
 
 # TODO: Drop decode→re-tokenize helpers once vllm-omni BagelPipeline accepts
@@ -152,6 +189,7 @@ class _BagelSchedulerAdapter:
             (or ``None`` outside the SDE window).
         """
         i = self._step_counter
+        in_window = True
         if self._sde_window is not None:
             begin, end = self._sde_window
             in_window = begin <= i < end
@@ -180,7 +218,22 @@ class _BagelSchedulerAdapter:
             **kwargs,
         )
         self._step_counter += 1
-        prev_sample, log_prob = out[0], out[1]
+        prev_sample, log_prob, prev_sample_mean, std_dev_t = out[0], out[1], out[2], out[3]
+        if in_window and log_prob is not None:
+            _parity_dump(
+                {
+                    "event": "rollout_step",
+                    "step": int(i),
+                    "sigma": _parity_tensor_summary(sigma),
+                    "dt_arg": _parity_tensor_summary(dt),
+                    "sample": _parity_tensor_summary(sample, limit=4),
+                    "model_output": _parity_tensor_summary(model_output, limit=4),
+                    "prev_sample": _parity_tensor_summary(prev_sample.squeeze(0), limit=4),
+                    "prev_sample_mean": _parity_tensor_summary(prev_sample_mean.squeeze(0), limit=4),
+                    "std_dev_t": _parity_tensor_summary(std_dev_t),
+                    "log_prob": _parity_tensor_summary(log_prob),
+                }
+            )
         prev_sample = prev_sample.squeeze(0)
         if log_prob is not None:
             log_prob = log_prob.reshape(())
@@ -229,6 +282,68 @@ def _pick_sde_window(
         rng = random.Random()
     begin = rng.randint(low, high_inclusive)
     return (begin, begin + int(window_size))
+
+
+def _pick_strategy_sde_window(
+    *,
+    window_size: Optional[int],
+    window_range: Optional[Any],
+    extra_args: dict[str, Any],
+    seed: Optional[int],
+    request_id: Optional[str],
+) -> Optional[tuple[int, int]]:
+    """Pick an SDE window, honoring rollout algo window-strategy knobs.
+
+    BAGEL FlowGRPO historically used a per-call random draw.  The rollout
+    config already exposes the same knobs as MixGRPO (`sample_strategy`,
+    `iters_per_group`, `sde_window_seed`); honor them here so debug and
+    training runs are reproducible and window placement is not coupled to the
+    request UUID.
+    """
+    if window_size is None or int(window_size) <= 0:
+        return None
+
+    size = int(window_size)
+    strategy = str(extra_args.get("sample_strategy", "random"))
+
+    if strategy == "progressive":
+        low = int(window_range[0]) if window_range is not None else 0
+        high = int(window_range[1]) if window_range is not None else size
+        max_start = high - size
+        if max_start < low:
+            return (low, low + size)
+
+        global_steps = int(extra_args.get("global_steps", 0))
+        iters_per_group = max(1, int(extra_args.get("iters_per_group", 1)))
+        n_advances = max(0, global_steps) // iters_per_group
+        begin = min(low + n_advances * size, max_start)
+        return (begin, begin + size)
+
+    if strategy == "random":
+        sde_window_seed = extra_args.get("sde_window_seed")
+        if sde_window_seed is not None:
+            global_steps = int(extra_args.get("global_steps", 0))
+            return _pick_sde_window(
+                window_size=size,
+                window_range=window_range,
+                seed=int(sde_window_seed) + global_steps,
+                request_id=None,
+            )
+
+        return _pick_sde_window(
+            window_size=size,
+            window_range=window_range,
+            seed=seed,
+            request_id=request_id,
+        )
+
+    logger.warning("Unknown BAGEL SDE sample_strategy=%r; falling back to per-request random window.", strategy)
+    return _pick_sde_window(
+        window_size=size,
+        window_range=window_range,
+        seed=seed,
+        request_id=request_id,
+    )
 
 
 @VllmOmniPipelineBase.register("OmniBagelForConditionalGeneration", algorithm="flow_grpo")
@@ -296,9 +411,10 @@ class BagelPipelineWithLogProb(BagelPipeline):
 
         sde_window: Optional[tuple[int, int]] = None
         if sde_window_size and noise_level > 0.0:
-            sde_window = _pick_sde_window(
+            sde_window = _pick_strategy_sde_window(
                 window_size=int(sde_window_size),
                 window_range=sde_window_range,
+                extra_args=extra_args,
                 seed=req.sampling_params.seed,
                 request_id=getattr(req, "request_id", None),
             )
@@ -307,6 +423,9 @@ class BagelPipelineWithLogProb(BagelPipeline):
         # and return_logprobs per-step based on the SDE window.
         self.scheduler_kwargs = {k: extra_args[k] for k in ("noise_level", "sde_type", "generator") if k in extra_args}
         self.scheduler_kwargs["return_logprobs"] = logprobs
+        # Official flow_grpo BAGEL stores only the quadratic term of the
+        # Gaussian log-prob, omitting the normalizer constants.
+        self.scheduler_kwargs["include_logprob_normalizer"] = False
 
         # Per-request scheduler setup matching training-side sigma schedule.
         assert req.sampling_params.num_inference_steps is not None, "num_inference_steps must be set for RL rollouts"
@@ -339,6 +458,18 @@ class BagelPipelineWithLogProb(BagelPipeline):
                 traj_latents = traj_latents[begin : end + 1]
             if traj_timesteps is not None:
                 traj_timesteps = traj_timesteps[begin:end]
+
+        _parity_dump(
+            {
+                "event": "rollout",
+                "request_id": str(getattr(req, "request_id", "")),
+                "sde_window": list(sde_window) if sde_window is not None else None,
+                "timesteps": _parity_tensor_summary(traj_timesteps),
+                "log_probs": _parity_tensor_summary(traj_log_probs),
+                "first_latent": _parity_tensor_summary(traj_latents[0] if traj_latents is not None else None, limit=4),
+                "last_latent": _parity_tensor_summary(traj_latents[-1] if traj_latents is not None else None, limit=4),
+            }
+        )
 
         return DiffusionOutput(
             output=maybe_to_cpu(output.output),

@@ -67,6 +67,7 @@ class FlowMatchSDEDiscreteScheduler(FlowMatchEulerDiscreteScheduler):
         prev_sample: Optional[torch.FloatTensor] = None,
         sde_type: Literal["sde", "cps", "dance_sde"] = "sde",
         return_logprobs: bool = True,
+        include_logprob_normalizer: bool = True,
     ) -> FlowMatchSDEDiscreteSchedulerOutput | tuple:
         """
         Predict the sample from the previous timestep by reversing the SDE. This function propagates the diffusion
@@ -129,6 +130,7 @@ class FlowMatchSDEDiscreteScheduler(FlowMatchEulerDiscreteScheduler):
             prev_sample=prev_sample,
             sde_type=sde_type,
             return_logprobs=return_logprobs,
+            include_logprob_normalizer=include_logprob_normalizer,
         )
 
         # upon completion increase step index by one
@@ -153,6 +155,7 @@ class FlowMatchSDEDiscreteScheduler(FlowMatchEulerDiscreteScheduler):
         sde_type: Literal["cps", "sde", "dance_sde"] = "sde",
         return_logprobs: bool = True,
         return_sqrt_dt: bool = False,
+        include_logprob_normalizer: bool = True,
     ):
         """
         Run a single SDE / CPS reverse step.
@@ -222,11 +225,15 @@ class FlowMatchSDEDiscreteScheduler(FlowMatchEulerDiscreteScheduler):
                 prev_sample = prev_sample_mean + std_dev_t * torch.sqrt(-1 * dt) * variance_noise
 
             if return_logprobs:
-                log_prob = (
-                    -((prev_sample.detach() - prev_sample_mean) ** 2) / (2 * ((std_dev_t * torch.sqrt(-1 * dt)) ** 2))
-                    - torch.log(std_dev_t * torch.sqrt(-1 * dt))
-                    - torch.log(torch.sqrt(2 * torch.as_tensor(math.pi)))
+                log_prob = -((prev_sample.detach() - prev_sample_mean) ** 2) / (
+                    2 * ((std_dev_t * torch.sqrt(-1 * dt)) ** 2)
                 )
+                if include_logprob_normalizer:
+                    log_prob = (
+                        log_prob
+                        - torch.log(std_dev_t * torch.sqrt(-1 * dt))
+                        - torch.log(torch.sqrt(2 * torch.as_tensor(math.pi)))
+                    )
             else:
                 log_prob = None
 
@@ -287,11 +294,9 @@ class FlowMatchSDEDiscreteScheduler(FlowMatchEulerDiscreteScheduler):
                 prev_sample = prev_sample_mean + std_dev_t * variance_noise
 
             if return_logprobs:
-                log_prob = (
-                    -((prev_sample.detach() - prev_sample_mean) ** 2) / (2 * (std_dev_t**2))
-                    - torch.log(std_dev_t)
-                    - torch.log(torch.sqrt(2 * torch.as_tensor(math.pi)))
-                )
+                log_prob = -((prev_sample.detach() - prev_sample_mean) ** 2) / (2 * (std_dev_t**2))
+                if include_logprob_normalizer:
+                    log_prob = log_prob - torch.log(std_dev_t) - torch.log(torch.sqrt(2 * torch.as_tensor(math.pi)))
             else:
                 log_prob = None
 
