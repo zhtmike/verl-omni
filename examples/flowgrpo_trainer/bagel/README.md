@@ -104,7 +104,7 @@ generation pathway (``moe_gen`` parameters) while keeping the understanding
 pathway frozen:
 
 ```bash
-bash examples/flowgrpo_trainer/run_bagel_pickscore.sh
+bash examples/flowgrpo_trainer/bagel/run_bagel_pickscore.sh
 ```
 
 Key differences from the LoRA variant:
