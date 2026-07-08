@@ -82,7 +82,7 @@ def validate_attention_consistency(config: Any) -> None:
 
     Rules:
         - If the training engine is VeOmni, skip validation.
-        - If ``attn_backend`` is ``_flash_3_varlen_hub`` (FA2/FA3), rollout
+        - If ``attn_backend`` is ``flash_varlen_hub`` or ``_flash_3_varlen_hub`` (FA2/FA3), rollout
           must be ``FLASH_ATTN``.
         - If ``attn_backend`` is ``native`` or ``_native_npu``, rollout must be
           ``TORCH_SDPA``.

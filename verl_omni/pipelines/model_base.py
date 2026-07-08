@@ -70,15 +70,6 @@ class DiffusionModelBase(ABC):
             import_external_libs(model_config.external_lib)
 
         try:
-            if architecture == "QwenImagePipeline":
-                logger.info(
-                    "Applying monkey-patch for QwenImageTransformer2DModel Ulysses SP "
-                    "This workaround will be removed once we upgrade to a diffusers release that "
-                    "includes the upstream fix."
-                )
-                from verl_omni.models.diffusers.qwen_image import apply_qwen_image_ulysses_mask_fix
-
-                apply_qwen_image_ulysses_mask_fix()
             return cls._registry[key]
         except KeyError:
             registered = sorted(cls._registry.keys())
