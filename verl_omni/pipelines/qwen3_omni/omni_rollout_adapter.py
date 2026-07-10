@@ -52,18 +52,6 @@ class Qwen3OmniRolloutAdapter(OmniRolloutPipelineBase):
 
         Returns:
             list: Per-stage pipeline topology objects from vLLM-Omni.
-
-        ================= ============================================
-        pipeline_mode     stages returned
-        ================= ============================================
-        ``thinker_only`` stage 0 from the thinker-only variant
-        ``thinker_talker`` stages 0-1 from the full pipeline
-        ``full``         stages 0-2 from the full pipeline
-        ================= ============================================
-
-        Stages are returned **as-is** from vLLM-Omni.  Call
-        ``rollout_flags`` to get model-specific rollout flags per
-        stage.
         """
         if pipeline_mode == "thinker_only":
             stages = list(QWEN3_OMNI_THINKER_ONLY_PIPELINE.stages)
@@ -93,23 +81,6 @@ class Qwen3OmniRolloutAdapter(OmniRolloutPipelineBase):
             dict[int, dict]: Per-stage flags mapping stage IDs to
             ``{return_hidden_states, final_output, final_output_type}``.
             Empty dict for ``thinker_only``.
-
-        ================= ==================================================
-        pipeline_mode     flags
-        ================= ==================================================
-        ``thinker_only`` ``{}`` — no flags needed.
-        ``thinker_talker`` stage 0: ``return_hidden_states``, non-terminal.
-                            stage 1: terminal ``codec`` output.
-        ``full``         stage 0: ``return_hidden_states``, non-terminal.
-        ================= ==================================================
-
-        Each per-stage dict contains:
-
-        - ``return_hidden_states`` (bool) — whether the stage should
-          emit hidden states for downstream consumers.
-        - ``final_output`` (bool) — terminal output stage.
-        - ``final_output_type`` (str | None) — output modality
-          (``text``, ``codec``, ``audio``).
         """
         if pipeline_mode == "thinker_only":
             return {}
