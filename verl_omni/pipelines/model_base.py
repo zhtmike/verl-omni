@@ -447,17 +447,39 @@ class OmniRolloutPipelineBase:
 
     @classmethod
     @abstractmethod
-    def build_stage_configs(cls, pipeline_mode: str = "thinker_only") -> list[dict]:
-        """Return per-stage topology defaults for a vLLM-Omni stage config.
+    def build_stage_configs(cls, pipeline_mode: str = "thinker_only") -> list:
+        """Return per-stage pipeline topology for vLLM-Omni.
 
-        Each dict is the model-specific starting point for one stage's
-        ``engine_args`` (``model_stage``, ``model_arch``,
-        ``worker_type``, ``hf_config_name``, etc.).
+        Each adapter defines its own *pipeline_mode* vocabulary
+        (e.g. ``"thinker_only"`` / ``"full"`` for omni models,
+        ``"ar_only"`` / ``"dit_only"`` for diffusion hybrids).
 
         Args:
-            pipeline_mode: ``"thinker_only"`` | ``"thinker_talker"`` | ``"full"``.
+            pipeline_mode: Model-specific mode selector.
 
         Returns:
-            list[dict]: One topology dict per pipeline stage.
+            list[:class:`~vllm_omni.config.stage_config.StagePipelineConfig`]:
+            One frozen topology object per pipeline stage.
         """
         pass
+
+    @classmethod
+    def rollout_flags(cls, pipeline_mode="thinker_only"):
+        """Return per-stage rollout flags for *pipeline_mode*.
+
+        Returns a ``dict[int, dict]`` mapping stage IDs to flags the
+        rollout engine should apply (e.g. ``return_hidden_states``,
+        ``final_output``).  Default returns ``{}`` — models that don't
+        need rollout-specific flags get this for free.
+
+        Subclasses override to add model-specific flags like
+        ``return_hidden_states`` on intermediate AR stages in omni
+        pipelines.
+
+        Args:
+            pipeline_mode: The mode used to build the stages.
+
+        Returns:
+            dict[int, dict]: Per-stage flags (empty dict by default).
+        """
+        return {}

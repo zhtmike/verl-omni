@@ -13,86 +13,104 @@
 # limitations under the License.
 """Qwen3-Omni rollout pipeline adapter.
 
-Generates per-stage ``engine_args`` topology defaults for running
-Qwen3-Omni as a multi-stage pipeline in vLLM-Omni.
+Provides the per-stage pipeline topology for Qwen3-Omni by delegating to
+vLLM-Omni's frozen :class:`~vllm_omni.config.stage_config.PipelineConfig`
+definitions — no duplication of what vLLM-Omni already owns.
 """
 
-import logging
+from vllm_omni.model_executor.models.qwen3_omni.pipeline import (
+    QWEN3_OMNI_PIPELINE,
+    QWEN3_OMNI_THINKER_ONLY_PIPELINE,
+)
 
 from verl_omni.pipelines.model_base import OmniRolloutPipelineBase
-
-logger = logging.getLogger(__name__)
 
 
 @OmniRolloutPipelineBase.register("qwen3_omni_moe")
 class Qwen3OmniRolloutAdapter(OmniRolloutPipelineBase):
     """Rollout pipeline topology adapter for Qwen3-Omni.
 
-    Registered under ``model_type="qwen3_omni_moe"``.  Supports three
-    pipeline modes: ``"thinker_only"`` (AR text), ``"thinker_talker"``
-    (speech codec tokens), and ``"full"`` (audio waveform).
+    Registered under ``model_type="qwen3_omni_moe"``.  Stage topology
+    comes unchanged from vLLM-Omni's ``QWEN3_OMNI_PIPELINE`` and
+    ``QWEN3_OMNI_THINKER_ONLY_PIPELINE``.
+
+    Three pipeline modes map to subsets of the full 3-stage pipeline
+    (thinker → talker → code2wav):
+
+    * ``"thinker_only"`` — stage 0 (text output).
+    * ``"thinker_talker"`` — stages 0-1 (codec output).
+    * ``"full"`` — stages 0-2 (audio waveform output).
     """
 
     @classmethod
-    def build_stage_configs(cls, pipeline_mode: str = "thinker_only") -> list[dict]:
-        """Return per-stage model-topology defaults for vLLM-Omni.
+    def build_stage_configs(cls, pipeline_mode="thinker_only"):
+        """Return per-stage :class:`~vllm_omni.config.stage_config.StagePipelineConfig` objects.
 
-        Args:
-            pipeline_mode: ``"thinker_only"`` | ``"thinker_talker"`` | ``"full"``.
+        ``pipeline_mode`` selects which stages to include:
 
-        Returns:
-            list[dict]: One topology dict per pipeline stage.
+        ================= ============================================
+        pipeline_mode     stages returned
+        ================= ============================================
+        ``"thinker_only"`` stage 0 from the thinker-only variant
+        ``"thinker_talker"`` stages 0-1 from the full pipeline
+        ``"full"``         stages 0-2 from the full pipeline
+        ================= ============================================
+
+        Stages are returned **as-is** from vLLM-Omni.  Call
+        :meth:`rollout_flags` to get model-specific rollout flags per
+        stage.
         """
-        thinker_engine = {
-            "model_stage": "thinker",
-            "model_arch": "Qwen3OmniMoeThinkerForConditionalGeneration",
-            "worker_type": "ar",
-            "scheduler_cls": "vllm_omni.core.sched.omni_ar_scheduler.OmniARScheduler",
-            "hf_config_name": "thinker_config",
-        }
-        thinker = {
-            "stage_id": 0,
-            "engine_args": thinker_engine,
-            "final_output": True,
-            "final_output_type": "text",
-        }
-        thinker_with_hidden = {
-            "stage_id": 0,
-            "engine_args": {**thinker_engine, "return_hidden_states": True},
-            "final_output": False,
-        }
-        talker = {
-            "stage_id": 1,
-            "engine_args": {
-                "model_stage": "talker",
-                "model_arch": "Qwen3OmniMoeTalkerForConditionalGeneration",
-                "worker_type": "codec",
-                "hf_config_name": "talker_config",
-            },
-        }
-        code2wav = {
-            "stage_id": 2,
-            "engine_args": {
-                "model_stage": "code2wav",
-                "model_arch": "Qwen3OmniMoeCode2WavForConditionalGeneration",
-                "worker_type": "waveform",
-            },
-        }
-
         if pipeline_mode == "thinker_only":
-            return [thinker]
-        elif pipeline_mode == "thinker_talker":
-            return [
-                thinker_with_hidden,
-                {**talker, "final_output": True, "final_output_type": "codec"},
-            ]
-        elif pipeline_mode == "full":
-            return [
-                thinker_with_hidden,
-                talker,
-                {**code2wav, "final_output": True, "final_output_type": "waveform"},
-            ]
-        else:
-            raise ValueError(
-                f"Unknown pipeline_mode={pipeline_mode!r}. Expected one of: 'thinker_only', 'thinker_talker', 'full'."
+            stages = list(QWEN3_OMNI_THINKER_ONLY_PIPELINE.stages)
+            # Guard against upstream changes that silently add stages.
+            assert len(stages) == 1, (
+                f"Expected 1 stage in thinker-only pipeline, got {len(stages)}. "
+                "vLLM-Omni may have changed the pipeline definition."
             )
+            return stages
+        if pipeline_mode == "thinker_talker":
+            return list(QWEN3_OMNI_PIPELINE.stages[:2])
+        if pipeline_mode == "full":
+            return list(QWEN3_OMNI_PIPELINE.stages)
+        raise ValueError(
+            f"Unknown pipeline_mode={pipeline_mode!r}. Expected one of: 'thinker_only', 'thinker_talker', 'full'."
+        )
+
+    @classmethod
+    def rollout_flags(cls, pipeline_mode="thinker_only"):
+        """Return per-stage rollout flags for *pipeline_mode*.
+
+        Returns a ``dict[int, dict]`` mapping stage IDs to rollout
+        flags that the caller should apply:
+
+        ================= ==================================================
+        pipeline_mode     flags
+        ================= ==================================================
+        ``"thinker_only"`` ``{}`` — no flags needed.
+        ``"thinker_talker"`` stage 0: ``return_hidden_states``, non-terminal.
+                            stage 1: terminal ``"codec"`` output.
+        ``"full"``         stage 0: ``return_hidden_states``, non-terminal.
+        ================= ==================================================
+
+        Each per-stage dict contains:
+
+        * ``"return_hidden_states"`` (bool) — whether the stage should
+          emit hidden states for downstream consumers.
+        * ``"final_output"`` (bool) — terminal output stage.
+        * ``"final_output_type"`` (str | None) — output modality
+          (``"text"``, ``"codec"``, ``"audio"``).
+        """
+        if pipeline_mode == "thinker_only":
+            return {}
+        if pipeline_mode == "thinker_talker":
+            return {
+                0: {"return_hidden_states": True, "final_output": False, "final_output_type": None},
+                1: {"final_output": True, "final_output_type": "codec"},
+            }
+        if pipeline_mode == "full":
+            return {
+                0: {"return_hidden_states": True, "final_output": False, "final_output_type": None},
+            }
+        raise ValueError(
+            f"Unknown pipeline_mode={pipeline_mode!r}. Expected one of: 'thinker_only', 'thinker_talker', 'full'."
+        )
