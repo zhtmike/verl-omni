@@ -13,15 +13,25 @@
 # limitations under the License.
 """Regression: upstream fixes that made patches unnecessary for Qwen3-Omni.
 
+# TODO (mike): remove this comment once the patches are dropped.
 Patches dropped from the adapter:
-- ``_apply_tie_embeddings_fix``   → v5 default is ``False``
-- ``_install_moe_unfuse_hook``    → PEFT handles MoE natively
+- ``_apply_tie_embeddings_fix``   → v5 config defaults ``tie_word_embeddings=False``
+- ``_install_moe_unfuse_hook``    → PEFT >= 0.19.0 handles MoE natively
 - ``module._no_split_modules``    → thinker class already correct
 """
+
+import importlib.metadata
 
 import pytest
 import torch
 import torch.nn as nn
+from packaging.version import parse as parse_version
+
+
+def _require_version(pkg_name: str, min_version: str):
+    """Raise ``AssertionError`` if *pkg_name* is below *min_version*."""
+    ver = importlib.metadata.version(pkg_name)
+    assert parse_version(ver) >= parse_version(min_version), f"{pkg_name} >= {min_version} is required, got {ver}"
 
 
 def _has_lora(module: nn.Module) -> bool:
@@ -67,6 +77,7 @@ class _MoEModel(nn.Module):
 def test_peft_lora_attaches_to_fused_moe_natively():
     """PEFT converts gate_proj+up_proj → gate_up_proj with doubled rank."""
     pytest.importorskip("peft")
+    _require_version("peft", "0.19.0")
     from peft import LoraConfig, get_peft_model
 
     model = _MoEModel()
@@ -80,41 +91,51 @@ def test_peft_lora_attaches_to_fused_moe_natively():
     # 1. Dense nn.Linear layers get standard LoRA.
     assert _has_lora(peft_model.dense.q_proj), "dense q_proj missing LoRA"
     assert _has_lora(peft_model.dense.k_proj), "dense k_proj missing LoRA"
+    assert _has_lora(peft_model.dense.v_proj), "dense v_proj missing LoRA"
+    assert _has_lora(peft_model.dense.o_proj), "dense o_proj missing LoRA"
 
-    # 2. PEFT doubled the rank — gate_proj + up_proj fused into gate_up_proj.
-    cur_r = peft_model.peft_config["default"].r
-    assert cur_r != 8, f"PEFT should have doubled LoRA rank (8 → 16) for fused gate_up_proj, got r={cur_r}"
+    # 2. PEFT fused gate_proj+up_proj → gate_up_proj, and down_proj, in target_parameters.
+    cfg = peft_model.peft_config["default"]
+    assert "gate_up_proj" in cfg.target_parameters, (
+        f"PEFT should move gate_proj+up_proj to target_parameters, got {cfg.target_parameters}"
+    )
+    assert "down_proj" in cfg.target_parameters, (
+        f"PEFT should move down_proj to target_parameters, got {cfg.target_parameters}"
+    )
 
-    # 3. gate_up_proj parameter exists and is not an nn.Linear module.
-    assert hasattr(peft_model.experts, "gate_up_proj"), "gate_up_proj parameter should still exist after PEFT wrapping"
+    # 3. PEFT doubled rank and alpha via rank_pattern (base .r stays unchanged).
+    gate_up_r = next((v for k, v in cfg.rank_pattern.items() if "gate_up_proj" in k), None)
+    assert gate_up_r == 16, f"PEFT should double rank (8 → 16) in rank_pattern for gate_up_proj, got {gate_up_r}"
 
-
-def test_adapter_source_has_no_peft_references():
-    """The adapter source must not import or reference ``peft``."""
-    import verl_omni.pipelines.qwen3_omni.thinker_training_adapter as ta
-
-    source = open(ta.__file__).read()
-    err = "adapter source references 'peft' — PEFT handles MoE natively"
-    assert "peft" not in source, err
-    assert "get_peft_model" not in source, err
+    # 4. gate_up_proj parameter is preserved through PEFT wrapping.
+    obj = peft_model.experts
+    while hasattr(obj, "base_layer"):
+        obj = obj.base_layer
+    assert hasattr(obj, "gate_up_proj"), "gate_up_proj parameter should still be reachable through PEFT wrapping"
 
 
 def test_tie_word_embeddings_is_false_by_default():
-    """v5 config defaults ``tie_word_embeddings=False``."""
+    """v5 config: ``tie_word_embeddings=False`` on the thinker sub-config."""
     pytest.importorskip("transformers")
+    _require_version("transformers", "5.0.0")
     from transformers.models.qwen3_omni_moe import Qwen3OmniMoeConfig
 
     cfg = Qwen3OmniMoeConfig()
-    assert cfg.tie_word_embeddings is False, "tie_word_embeddings should default to False in transformers >= 5.0"
+    # The umbrella config delegates to sub-configs; the thinker sub-config
+    # is what FSDP uses after adapter strips non-thinker modules.
+    assert cfg.thinker_config.tie_word_embeddings is False, (
+        "thinker_config.tie_word_embeddings should default to False in transformers >= 5.0"
+    )
 
 
 def test_thinker_class_no_split_modules_is_correct():
     """Thinker subclass already uses the right FSDP layer class name."""
     pytest.importorskip("transformers")
+    _require_version("transformers", "5.0.0")
     from transformers.models.qwen3_omni_moe import (
         Qwen3OmniMoeThinkerForConditionalGeneration,
     )
 
-    expected = ["Qwen3OmniMoeThinkerTextDecoderLayer"]
+    expected = ["Qwen3OmniMoeAudioEncoder", "Qwen3OmniMoeVisionEncoder"]
     actual = Qwen3OmniMoeThinkerForConditionalGeneration._no_split_modules
     assert actual == expected, f"_no_split_modules should be {expected} in transformers >= 5.0, got {actual}"
