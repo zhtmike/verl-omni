@@ -35,16 +35,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class OmniModelConfig(BaseConfig):
-    """Configuration for omni (thinker/talker) model training.
-
-    Provides the fields that verl's FSDP engine needs for model loading
-    (``hf_config``, ``path``, ``no_split_modules``, etc.) plus
-    omni-specific fields (``architecture``, ``model_stage``).
-
-    RL algorithm selection (GSPO, GRPO, RLOO, etc.) is handled by
-    verl's ``actor.policy_loss.loss_mode`` and ``algorithm.adv_estimator``
-    config — the config is algorithm-agnostic.
-    """
+    """Configuration for omni (thinker/talker) model training."""
 
     _mutable_fields = {
         "model_type",
@@ -169,9 +160,9 @@ class OmniModelConfig(BaseConfig):
         self.architectures = getattr(self.hf_config, "architectures", None)
 
         if self.load_tokenizer:
-            self.local_tokenizer_path = copy_to_local(self.tokenizer_path, use_shm=self.use_shm)
             # Tokenizer/processor are loaded by the omni trainer via
             # OmniModelBase.configure_tokenizer / configure_processor.
+            self.local_tokenizer_path = copy_to_local(self.tokenizer_path, use_shm=self.use_shm)
 
     def get_processor(self):
         """Return the processor, or fall back to the tokenizer."""
