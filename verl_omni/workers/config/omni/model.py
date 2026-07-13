@@ -160,9 +160,19 @@ class OmniModelConfig(BaseConfig):
         self.architectures = getattr(self.hf_config, "architectures", None)
 
         if self.load_tokenizer:
-            # Tokenizer/processor are loaded by the omni trainer via
-            # OmniModelBase.configure_tokenizer / configure_processor.
             self.local_tokenizer_path = copy_to_local(self.tokenizer_path, use_shm=self.use_shm)
+            # Load tokenizer/processor via OmniModelBase adapter methods.
+            # This replaces the global monkey-patches on hf_processor / hf_tokenizer.
+            # Both the driver (OmniPPOTrainerSync._init_tokenizer) and workers
+            # (OmniModelConfig.__post_init__) use the same adapter methods.
+            from verl_omni.pipelines.model_base import OmniModelBase
+
+            adapter_cls = OmniModelBase.get_class(self)
+            tokenizer_path = self.local_tokenizer_path if self.local_tokenizer_path is not None else self.local_path
+            self.tokenizer = adapter_cls.configure_tokenizer(tokenizer_path, self)
+            # configure_processor needs the model path (not tokenizer path) for
+            # AutoProcessor.from_pretrained and AutoConfig.from_pretrained.
+            self.processor = adapter_cls.configure_processor(self.local_path, self)
 
     def get_processor(self):
         """Return the processor, or fall back to the tokenizer."""

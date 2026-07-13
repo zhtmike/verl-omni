@@ -13,3 +13,31 @@ defaults:
   - omni/model@actor_rollout_ref.model: omni_model
   - _self_
 
+actor_rollout_ref:
+
+  rollout:
+
+    # Use vLLM-Omni as the rollout backend for omni models.
+    name: vllm_omni
+
+    # Omni-specific agent loop (extends V1 AgentLoopWorkerTQ).
+    agent:
+
+      # verl loads this class via importlib (load_class_from_fqn) — no monkey-patching.
+      agent_loop_manager_class: verl_omni.agent_loop.omni_agent_loop.OmniAgentLoopManagerTQ
+
+  model:
+
+    # Omni model config (handled by OmniModelBase and OmniModelConfig).
+    # architecture and model_stage must be set per-recipe or via CLI.
+
+    # model_stage: thinker
+
+trainer:
+
+  v1:
+
+    # Use the registered omni trainer subclass (OmniPPOTrainerSync)
+    # which loads processor/tokenizer via OmniModelBase instead of
+    # the stock hf_processor / hf_tokenizer.
+    trainer_mode: omni_sync

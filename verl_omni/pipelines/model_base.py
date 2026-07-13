@@ -501,3 +501,23 @@ class OmniRolloutPipelineBase:
             dict[int, dict]: Per-stage flags (empty dict by default).
         """
         return {}
+
+    @classmethod
+    def get_pipeline_name(cls, pipeline_mode: str = "thinker_only") -> str:
+        """Return the vLLM-Omni pipeline registry key for *pipeline_mode*.
+
+        Used by the rollout server to select the correct pipeline variant
+        (e.g. ``qwen3_omni_moe_thinker_only`` vs ``qwen3_omni_moe``)
+        without a static YAML file.  The pipeline name is passed to
+        vLLM-Omni's deploy config ``pipeline`` field.
+
+        Subclasses override to map mode names to vLLM-Omni pipeline keys.
+
+        Args:
+            pipeline_mode: The mode selector (model-specific vocabulary).
+
+        Returns:
+            str: vLLM-Omni pipeline registry key, or empty string to use
+            the model's default pipeline auto-detection.
+        """
+        return ""

@@ -14,6 +14,7 @@
 import argparse
 import logging
 import os
+import tempfile
 from dataclasses import asdict
 from typing import Any, Optional
 
@@ -22,6 +23,7 @@ import ray
 import torch
 import torchvision.transforms as T
 import vllm_omni.entrypoints.cli.serve
+import yaml
 from verl.utils.config import omega_conf_to_dataclass
 from verl.utils.import_utils import import_external_libs
 from verl.utils.net_utils import get_free_port
@@ -44,7 +46,7 @@ from vllm_omni.inputs.data import OmniCustomPrompt, OmniDiffusionSamplingParams
 from vllm_omni.lora.request import LoRARequest
 from vllm_omni.outputs import OmniRequestOutput
 
-from verl_omni.pipelines.model_base import VllmOmniPipelineBase
+from verl_omni.pipelines.model_base import OmniRolloutPipelineBase, VllmOmniPipelineBase
 from verl_omni.workers.config import DiffusionModelConfig, DiffusionRolloutConfig
 from verl_omni.workers.rollout.replica import DiffusionOutput
 
@@ -132,9 +134,53 @@ class vLLMOmniHttpServer(vLLMHttpServer):
         engine_kwargs.pop("output_mode", None)
         if self._ar_mode:
             engine_kwargs.pop("custom_pipeline", None)
+            # Resolve pipeline_mode → deploy_config from the rollout adapter.
+            pipeline_mode = engine_kwargs.pop("pipeline_mode", None)
+            model_type = engine_kwargs.pop("model_type", None)
+            if pipeline_mode is not None and model_type is not None:
+                self._resolve_pipeline_from_adapter(engine_kwargs, model_type, pipeline_mode)
             for underscore_key in ("stage_configs_path", "deploy_config", "stage_overrides", "async_chunk"):
                 if underscore_key in engine_kwargs:
                     engine_kwargs[underscore_key.replace("_", "-")] = engine_kwargs.pop(underscore_key)
+
+    def _resolve_pipeline_from_adapter(self, engine_kwargs: dict, model_type: str, pipeline_mode: str) -> None:
+        """Use OmniRolloutPipelineBase to generate a deploy config that selects
+        the correct pipeline variant (e.g. thinker-only), replacing the need
+        for a static per-model YAML file."""
+        adapter_cls = OmniRolloutPipelineBase.get_class(model_type)
+        if adapter_cls is None:
+            logger.warning(
+                "No rollout adapter registered for model_type=%r — pipeline_mode=%r will be ignored",
+                model_type,
+                pipeline_mode,
+            )
+            return
+        pipeline_name = adapter_cls.get_pipeline_name(pipeline_mode)
+        if not pipeline_name:
+            logger.warning(
+                "Rollout adapter for model_type=%r returned empty pipeline name for pipeline_mode=%r",
+                model_type,
+                pipeline_mode,
+            )
+            return
+        # Write a minimal deploy config selecting the pipeline variant.
+        # The deploy config only needs a `pipeline` field — engine args
+        # (TP size, memory, etc.) come from the top-level verl config.
+        deploy_yaml = yaml.dump({"pipeline": pipeline_name})
+        self._temp_deploy_dir = tempfile.mkdtemp(prefix="verl_omni_deploy_")
+        deploy_path = os.path.join(
+            self._temp_deploy_dir,
+            f"{pipeline_name}.yaml",
+        )
+        with open(deploy_path, "w") as f:
+            f.write(deploy_yaml)
+        engine_kwargs["deploy_config"] = deploy_path
+        logger.info(
+            "Generated deploy config %s with pipeline=%r",
+            deploy_path,
+            pipeline_name,
+        )
+        self._temp_deploy_dir = os.path.dirname(deploy_path)
 
     # -----------------------------------------------------------------------
     # Server lifecycle
