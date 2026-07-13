@@ -67,8 +67,7 @@ python3 -m verl_omni.trainer.main_omni \
     actor_rollout_ref.rollout.layered_summon=true \
     actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu=4 \
     "++actor_rollout_ref.rollout.engine_kwargs.vllm_omni.output_mode=ar" \
-    "++actor_rollout_ref.rollout.engine_kwargs.vllm_omni.pipeline_mode=thinker_only" \
-    "++actor_rollout_ref.rollout.engine_kwargs.vllm_omni.model_type=qwen3_omni_moe" \
+    "++actor_rollout_ref.rollout.engine_kwargs.vllm_omni.pipeline_name=qwen3_omni_moe_thinker_only" \
     actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=4 \
     actor_rollout_ref.ref.fsdp_config.param_offload=true \
     actor_rollout_ref.ref.fsdp_config.model_dtype=bf16 \

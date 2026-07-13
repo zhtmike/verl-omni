@@ -96,17 +96,3 @@ class Qwen3OmniRolloutAdapter(OmniRolloutPipelineBase):
         raise ValueError(
             f"Unknown pipeline_mode={pipeline_mode!r}. Expected one of: 'thinker_only', 'thinker_talker', 'full'."
         )
-
-    @classmethod
-    def get_pipeline_name(cls, pipeline_mode="thinker_only") -> str:
-        """Return the vLLM-Omni pipeline registry key for ``pipeline_mode``.
-
-        Args:
-            pipeline_mode: One of ``thinker_only``, ``thinker_talker``, ``full``.
-
-        Returns:
-            vLLM-Omni pipeline key (e.g. ``qwen3_omni_moe_thinker_only``).
-        """
-        if pipeline_mode == "thinker_only":
-            return "qwen3_omni_moe_thinker_only"
-        return "qwen3_omni_moe"
