@@ -145,12 +145,13 @@ class vLLMOmniHttpServer(vLLMHttpServer):
     def _write_deploy_config(self, engine_kwargs: dict, pipeline_name: str) -> None:
         """Generate a deploy config selecting the pipeline variant (e.g. thinker-only)."""
         deploy_yaml = yaml.dump({"pipeline": pipeline_name})
+        logger.info("Generated deploy config:\n%s", deploy_yaml.strip())
         self._temp_deploy_dir = tempfile.mkdtemp(prefix="verl_omni_deploy_")
         deploy_path = os.path.join(self._temp_deploy_dir, f"{pipeline_name}.yaml")
         with open(deploy_path, "w") as f:
             f.write(deploy_yaml)
         engine_kwargs["deploy_config"] = deploy_path
-        logger.info("Generated deploy config %s with pipeline=%r", deploy_path, pipeline_name)
+        logger.info("deploy config written to %s", deploy_path)
 
     # -----------------------------------------------------------------------
     # Server lifecycle
