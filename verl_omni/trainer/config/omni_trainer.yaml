@@ -20,12 +20,6 @@ actor_rollout_ref:
     # Use vLLM-Omni as the rollout backend for omni models.
     name: vllm_omni
 
-    # Omni-specific agent loop (extends V1 AgentLoopWorkerTQ).
-    agent:
-
-      # verl loads this class via importlib (load_class_from_fqn) — no monkey-patching.
-      agent_loop_manager_class: verl_omni.agent_loop.omni_agent_loop.OmniAgentLoopManagerTQ
-
   model:
 
     # Omni model config (handled by OmniModelBase and OmniModelConfig).
