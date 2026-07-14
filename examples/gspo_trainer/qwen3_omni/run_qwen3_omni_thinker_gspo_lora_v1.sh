@@ -63,8 +63,8 @@ python3 -m verl_omni.trainer.main_omni \
     actor_rollout_ref.ref.fsdp_config.use_orig_params=true \
     algorithm.adv_estimator=grpo \
     algorithm.use_kl_in_reward=False \
-    reward.custom_reward_function.path=pkg://verl.utils.reward_score \
-    reward.custom_reward_function.name=default_compute_score \
+    reward.reward_manager.source=register \
+    reward.reward_manager.name=naive \
     trainer.val_before_train=false \
     trainer.balance_batch=True \
     trainer.critic_warmup=0 \
