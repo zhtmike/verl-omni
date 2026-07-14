@@ -165,8 +165,7 @@ class OmniModelConfig(BaseConfig):
             self.local_tokenizer_path = copy_to_local(self.tokenizer_path, use_shm=self.use_shm)
 
             adapter_cls = OmniModelBase.get_class(self)
-            tokenizer_path = self.local_tokenizer_path if self.local_tokenizer_path is not None else self.local_path
-            self.tokenizer = adapter_cls.configure_tokenizer(tokenizer_path, self)
+            self.tokenizer = adapter_cls.configure_tokenizer(self.local_tokenizer_path, self)
             self.processor = adapter_cls.configure_processor(self.local_path, self)
 
     def get_processor(self):

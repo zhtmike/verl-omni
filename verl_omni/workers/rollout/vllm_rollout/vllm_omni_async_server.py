@@ -143,20 +143,14 @@ class vLLMOmniHttpServer(vLLMHttpServer):
                     engine_kwargs[underscore_key.replace("_", "-")] = engine_kwargs.pop(underscore_key)
 
     def _write_deploy_config(self, engine_kwargs: dict, pipeline_name: str) -> None:
-        """Generate a deploy config selecting the pipeline variant (e.g. thinker-only).
-
-        The deploy config file is written into a temporary directory that
-        is automatically cleaned up when the server object is garbage-collected.
-        """
-        deploy_yaml = yaml.dump({"pipeline": pipeline_name})
-        logger.info("Generated deploy config:\n%s", deploy_yaml.strip())
+        """Generate a deploy config YAML for the pipeline variant (e.g. thinker-only)."""
+        yaml_str = yaml.dump({"pipeline": pipeline_name}).strip()
+        logger.info("Generated deploy config:\n%s", yaml_str)
         self._temp_deploy_ctx = tempfile.TemporaryDirectory(prefix="verl_omni_deploy_")
-        deploy_dir = self._temp_deploy_ctx.name
-        deploy_path = os.path.join(deploy_dir, f"{pipeline_name}.yaml")
+        deploy_path = os.path.join(self._temp_deploy_ctx.name, f"{pipeline_name}.yaml")
         with open(deploy_path, "w") as f:
-            f.write(deploy_yaml)
+            f.write(yaml_str)
         engine_kwargs["deploy_config"] = deploy_path
-        logger.info("deploy config written to %s", deploy_path)
 
     # -----------------------------------------------------------------------
     # Server lifecycle
