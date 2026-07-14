@@ -130,7 +130,7 @@ class OmniModelConfig(BaseConfig):
     def __post_init__(self):
         import_external_libs(self.external_lib)
 
-        if self.path is MISSING:
+        if self.path == MISSING:
             raise ValueError("OmniModelConfig.path is required but was not set.")
 
         self.local_path = resolve_model_local_dir(self.path, use_shm=self.use_shm)
