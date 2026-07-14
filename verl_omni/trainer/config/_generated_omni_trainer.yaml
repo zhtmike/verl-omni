@@ -239,7 +239,7 @@ actor_rollout_ref:
     entropy_checkpointing: false
   rollout:
     _target_: verl.workers.config.RolloutConfig
-    name: ???
+    name: vllm_omni
     mode: async
     nnodes: 0
     n_gpus_per_node: ${oc.select:trainer.n_gpus_per_node,8}
@@ -867,7 +867,7 @@ trainer:
   device: cuda
   use_v1: false
   v1:
-    trainer_mode: sync
+    trainer_mode: omni_sync
     sync: {}
     colocate_async:
       num_warmup_batches: 1

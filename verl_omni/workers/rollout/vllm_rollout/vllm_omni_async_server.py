@@ -14,6 +14,7 @@
 import argparse
 import logging
 import os
+import tempfile
 from dataclasses import asdict
 from typing import Any, Optional
 
@@ -22,6 +23,7 @@ import ray
 import torch
 import torchvision.transforms as T
 import vllm_omni.entrypoints.cli.serve
+import yaml
 from verl.utils.config import omega_conf_to_dataclass
 from verl.utils.import_utils import import_external_libs
 from verl.utils.net_utils import get_free_port
@@ -132,9 +134,24 @@ class vLLMOmniHttpServer(vLLMHttpServer):
         engine_kwargs.pop("output_mode", None)
         if self._ar_mode:
             engine_kwargs.pop("custom_pipeline", None)
+            # Generate a deploy config from pipeline_name if provided.
+            pipeline_name = engine_kwargs.pop("pipeline_name", None)
+            if pipeline_name is not None:
+                self._write_deploy_config(engine_kwargs, pipeline_name)
             for underscore_key in ("stage_configs_path", "deploy_config", "stage_overrides", "async_chunk"):
                 if underscore_key in engine_kwargs:
                     engine_kwargs[underscore_key.replace("_", "-")] = engine_kwargs.pop(underscore_key)
+
+    def _write_deploy_config(self, engine_kwargs: dict, pipeline_name: str) -> None:
+        """Generate a deploy config selecting the pipeline variant (e.g. thinker-only)."""
+        deploy_yaml = yaml.dump({"pipeline": pipeline_name})
+        logger.info("Generated deploy config:\n%s", deploy_yaml.strip())
+        self._temp_deploy_dir = tempfile.mkdtemp(prefix="verl_omni_deploy_")
+        deploy_path = os.path.join(self._temp_deploy_dir, f"{pipeline_name}.yaml")
+        with open(deploy_path, "w") as f:
+            f.write(deploy_yaml)
+        engine_kwargs["deploy_config"] = deploy_path
+        logger.info("deploy config written to %s", deploy_path)
 
     # -----------------------------------------------------------------------
     # Server lifecycle
