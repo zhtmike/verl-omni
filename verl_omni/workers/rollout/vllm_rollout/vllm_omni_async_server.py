@@ -163,14 +163,15 @@ class vLLMOmniHttpServer(vLLMHttpServer):
                     engine_kwargs[underscore_key.replace("_", "-")] = engine_kwargs.pop(underscore_key)
 
     def _write_deploy_config(self, engine_kwargs: dict, pipeline_name: str, adapter_cls, pipeline_mode: str) -> None:
-        """Write a deploy config YAML from the adapter's stage topology and visible devices."""
-        device_control_env = get_visible_devices_keyword()
-        devices = os.environ.get(device_control_env, "")
-        deploy_dict = {"pipeline": pipeline_name}
-        if devices:
-            stages = adapter_cls.build_stage_configs(pipeline_mode=pipeline_mode)
-            stage_ids = [s.stage_id for s in stages]
-            deploy_dict["stages"] = [{"stage_id": sid, "devices": devices} for sid in stage_ids]
+        """Write a deploy config YAML from the adapter's stage topology."""
+        stages = adapter_cls.build_stage_configs(pipeline_mode=pipeline_mode)
+        deploy_dict: dict[str, object] = {"pipeline": pipeline_name}
+        if len(stages) > 1:
+            device_control_env = get_visible_devices_keyword()
+            devices = os.environ.get(device_control_env, "")
+            if devices:
+                stage_ids = [s.stage_id for s in stages]
+                deploy_dict["stages"] = [{"stage_id": sid, "devices": devices} for sid in stage_ids]
         yaml_str = yaml.dump(deploy_dict).strip()
         logger.info("Generated deploy config:\n%s", yaml_str)
         self._temp_deploy_ctx = tempfile.TemporaryDirectory(prefix="verl_omni_deploy_")
