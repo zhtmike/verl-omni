@@ -25,6 +25,7 @@ import torchvision.transforms as T
 import vllm_omni.entrypoints.cli.serve
 import yaml
 from verl.utils.config import omega_conf_to_dataclass
+from verl.utils.device import get_visible_devices_keyword
 from verl.utils.import_utils import import_external_libs
 from verl.utils.net_utils import get_free_port
 from verl.utils.tokenizer import normalize_token_ids
@@ -148,7 +149,16 @@ class vLLMOmniHttpServer(vLLMHttpServer):
 
     def _write_deploy_config(self, engine_kwargs: dict, pipeline_name: str) -> None:
         """Generate a deploy config YAML for the pipeline variant (e.g. thinker-only)."""
-        yaml_str = yaml.dump({"pipeline": pipeline_name}).strip()
+        from vllm_omni.config.omni_config import _resolve_registered_pipeline
+
+        device_control_env = get_visible_devices_keyword()
+        devices = os.environ.get(device_control_env, "")
+        deploy_dict = {"pipeline": pipeline_name}
+        if devices:
+            pipeline = _resolve_registered_pipeline(pipeline_name)
+            stage_ids = [topology.stage_id for topology in pipeline.stages] if pipeline is not None else [0]
+            deploy_dict["stages"] = [{"stage_id": sid, "devices": devices} for sid in stage_ids]
+        yaml_str = yaml.dump(deploy_dict).strip()
         logger.info("Generated deploy config:\n%s", yaml_str)
         self._temp_deploy_ctx = tempfile.TemporaryDirectory(prefix="verl_omni_deploy_")
         deploy_path = os.path.join(self._temp_deploy_ctx.name, f"{pipeline_name}.yaml")
