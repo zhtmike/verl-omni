@@ -57,7 +57,7 @@ class Qwen3OmniThinkerAdapter(OmniModelBase):
         module.forward = module.thinker.forward
         module.get_input_embeddings = module.thinker.get_input_embeddings
         module.set_input_embeddings = module.thinker.set_input_embeddings
-        module._no_split_modules = module.thinker._no_split_modules
+        module._no_split_modules = ["Qwen3OmniMoeThinkerTextDecoderLayer"]
         return module
 
     @classmethod
