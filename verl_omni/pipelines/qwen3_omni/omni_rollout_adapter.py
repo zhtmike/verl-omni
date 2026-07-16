@@ -98,7 +98,16 @@ class Qwen3OmniRolloutAdapter(OmniRolloutPipelineBase):
         )
 
     @classmethod
-    def get_engine_hf_overrides(cls, pipeline_mode: str = "thinker_only") -> dict:
+    def get_engine_hf_overrides(cls, pipeline_mode="thinker_only") -> dict:
+        """Return HF config overrides per *pipeline_mode*.
+
+        Args:
+            pipeline_mode (str): Pipeline mode selector.  One of
+                ``thinker_only``, ``thinker_talker``, ``full``.
+
+        Returns:
+            dict: HF config key-value overrides.
+        """
         if pipeline_mode == "thinker_only":
             return {"enable_audio_output": False}
         return {}
