@@ -6,9 +6,9 @@ set -x
 # Make verl_omni available to Ray workers
 export VERL_USE_EXTERNAL_MODULES=verl_omni
 
-MODEL_PATH=${MODEL_PATH:-"Qwen/Qwen3-Omni-30B-A3B-Instruct"}
-TRAIN_FILE=${TRAIN_FILE:-"$HOME/data/math/train.parquet"}
-VAL_FILE=${VAL_FILE:-"$HOME/data/math/test.parquet"}
+MODEL_PATH=${MODEL_PATH:-"$HOME/models/Qwen/Qwen3-Omni-30B-A3B-Instruct"}
+TRAIN_FILE=${TRAIN_FILE:-"$HOME/data/gsm8k/train.parquet"}
+VAL_FILE=${VAL_FILE:-"$HOME/data/gsm8k/test.parquet"}
 
 python3 -m verl_omni.trainer.main_omni \
     data.train_files="${TRAIN_FILE}" \
@@ -26,8 +26,9 @@ python3 -m verl_omni.trainer.main_omni \
     actor_rollout_ref.model.enable_gradient_checkpointing=True \
     actor_rollout_ref.model.use_remove_padding=True \
     actor_rollout_ref.model.exclude_modules=".*talker.*|.*code2wav.*|.*code_predictor.*|.*visual.*|.*audio_tower.*" \
+    actor_rollout_ref.model.attn_implementation="sdpa" \
     actor_rollout_ref.actor.freeze_vision_tower=true \
-    actor_rollout_ref.actor.optim.lr=1e-6 \
+    actor_rollout_ref.actor.optim.lr=1e-5 \
     actor_rollout_ref.actor.optim.lr_warmup_steps=10 \
     actor_rollout_ref.actor.optim.weight_decay=0.1 \
     actor_rollout_ref.actor.optim.clip_grad=1.0 \
@@ -42,8 +43,6 @@ python3 -m verl_omni.trainer.main_omni \
     actor_rollout_ref.actor.loss_agg_mode=seq-mean-token-mean \
     actor_rollout_ref.actor.fsdp_config.param_offload=true \
     actor_rollout_ref.actor.fsdp_config.optimizer_offload=true \
-    actor_rollout_ref.actor.fsdp_config.model_dtype=bf16 \
-    actor_rollout_ref.actor.fsdp_config.use_orig_params=true \
     actor_rollout_ref.rollout.n=16 \
     actor_rollout_ref.rollout.tensor_model_parallel_size=4 \
     actor_rollout_ref.rollout.gpu_memory_utilization=0.6 \
