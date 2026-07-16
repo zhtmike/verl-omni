@@ -13,14 +13,12 @@
 # limitations under the License.
 """Omni trainer — a PPOTrainerSync subclass registered via ``@register_trainer("omni_sync")``."""
 
-import json
-import os
-
 from verl.trainer.ppo.v1.trainer_base import register_trainer
 from verl.trainer.ppo.v1.trainer_sync import PPOTrainerSync
 from verl.utils.fs import copy_to_local
 
 from verl_omni.pipelines.model_base import OmniModelBase
+from verl_omni.workers.config import OmniModelConfig
 
 
 @register_trainer("omni_sync")
@@ -28,7 +26,7 @@ class OmniPPOTrainerSync(PPOTrainerSync):
     """``PPOTrainerSync`` subclass that wires tokenizer/processor from ``OmniModelConfig``."""
 
     def _init_tokenizer(self):
-        model_config = self.config.actor_rollout_ref.model
+        model_config: OmniModelConfig = self.config.actor_rollout_ref.model
         trust_remote_code = self.config.data.get("trust_remote_code", False)
         model_config.trust_remote_code = trust_remote_code
 
@@ -37,13 +35,7 @@ class OmniPPOTrainerSync(PPOTrainerSync):
 
         local_model_path = copy_to_local(model_path, use_shm=use_shm)
 
-        # Auto-detect architecture from config.json (follows diffusion pattern).
-        architecture = model_config.get("architecture")
-        if not architecture:
-            config_json = os.path.join(local_model_path, "config.json")
-            with open(config_json) as f:
-                architecture = json.load(f)["architectures"][0]
-
+        architecture = model_config.architecture
         tokenizer_path = model_config.get("tokenizer_path") or local_model_path
         local_tokenizer_path = copy_to_local(tokenizer_path, use_shm=use_shm)
 

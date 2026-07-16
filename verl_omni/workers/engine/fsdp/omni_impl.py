@@ -13,16 +13,15 @@
 # limitations under the License.
 """FSDP engine for omni models, registered as ``model_type="omni"``."""
 
-import json
-import os
 import warnings
 
 import torch
 from transformers import AutoModelForMultimodalLM
-from verl.utils.fs import copy_to_local
 from verl.utils.fsdp_utils import get_init_weight_context_manager
 from verl.workers.engine.base import EngineRegistry
 from verl.workers.engine.fsdp.transformer_impl import FSDPEngine
+
+from verl_omni.workers.config import OmniModelConfig
 
 
 @EngineRegistry.register(model_type="omni", backend=["fsdp", "fsdp2"], device=["cuda", "npu"])
@@ -34,13 +33,8 @@ class OmniFSDPEngine(FSDPEngine):
 
         from verl_omni.pipelines.model_base import OmniModelBase
 
-        # Auto-detect architecture from config.json (follows diffusion pattern).
-        architecture = self.model_config.get("architecture")
-        if not architecture:
-            local_path = copy_to_local(self.model_config.path, use_shm=self.model_config.get("use_shm", False))
-            config_json = os.path.join(local_path, "config.json")
-            with open(config_json) as f:
-                architecture = json.load(f)["architectures"][0]
+        self.model_config: OmniModelConfig
+        architecture = self.model_config.architecture
 
         torch_dtype = self.engine_config.model_dtype
 
