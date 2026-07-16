@@ -54,6 +54,10 @@ logger = logging.getLogger(__file__)
 logger.setLevel(logging.INFO)
 
 
+def _strip_none(d: dict) -> dict:
+    return {k: _strip_none(v) if isinstance(v, dict) else v for k, v in d.items() if v is not None}
+
+
 class vLLMOmniHttpServer(vLLMHttpServer):
     """vLLM-Omni http server in single node, this is equivalent to launch server with command line:
     ```
@@ -164,9 +168,7 @@ class vLLMOmniHttpServer(vLLMHttpServer):
             # AR mode: no diffusion pipeline. Drop None entries from
             # compilation_config that OmniEngineArgs may leave behind.
             if isinstance(engine_args.get("compilation_config"), dict):
-                engine_args["compilation_config"] = {
-                    k: v for k, v in engine_args["compilation_config"].items() if v is not None
-                }
+                engine_args["compilation_config"] = _strip_none(engine_args["compilation_config"])
         else:
             # inject multi-stage yaml config
             deploy_config = getattr(args, "deploy_config", None)
