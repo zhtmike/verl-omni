@@ -19,13 +19,13 @@ import torch
 from transformers import AutoModelForMultimodalLM
 from verl.utils.fsdp_utils import get_init_weight_context_manager
 from verl.workers.engine.base import EngineRegistry
-from verl.workers.engine.fsdp.transformer_impl import FSDPEngine
+from verl.workers.engine.fsdp.transformer_impl import FSDPEngineWithLMHead
 
 from verl_omni.workers.config import OmniModelConfig
 
 
 @EngineRegistry.register(model_type="omni", backend=["fsdp", "fsdp2"], device=["cuda", "npu"])
-class OmniFSDPEngine(FSDPEngine):
+class OmniFSDPEngine(FSDPEngineWithLMHead):
     """FSDP engine for omni models"""
 
     def _build_module(self):
