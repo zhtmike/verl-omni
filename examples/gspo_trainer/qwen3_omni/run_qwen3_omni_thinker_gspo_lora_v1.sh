@@ -21,8 +21,8 @@ python3 -m verl_omni.trainer.main_omni \
     data.val_max_samples=1000 \
     data.validation_shuffle=true \
     actor_rollout_ref.model.path="${MODEL_PATH}" \
-    actor_rollout_ref.model.lora_rank=64 \
-    actor_rollout_ref.model.lora_alpha=32 \
+    actor_rollout_ref.model.lora_rank=32 \
+    actor_rollout_ref.model.lora_alpha=16 \
     actor_rollout_ref.model.enable_gradient_checkpointing=True \
     actor_rollout_ref.model.use_remove_padding=True \
     actor_rollout_ref.model.exclude_modules=".*talker.*|.*code2wav.*|.*code_predictor.*|.*visual.*|.*audio_tower.*" \
