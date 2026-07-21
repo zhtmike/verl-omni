@@ -20,7 +20,7 @@ python3 -m verl_omni.trainer.main_omni \
     data.filter_overlong_prompts=true \
     actor_rollout_ref.model.path="${MODEL_PATH}" \
     actor_rollout_ref.model.lora_rank=32 \
-    actor_rollout_ref.model.lora_alpha=16 \
+    actor_rollout_ref.model.lora_alpha=64 \
     actor_rollout_ref.model.lora_dtype=float32 \
     actor_rollout_ref.model.enable_gradient_checkpointing=True \
     actor_rollout_ref.model.use_remove_padding=True \
