@@ -1,0 +1,23 @@
+# verl_omni/pipelines/minimax_h3_diffusion_nft/
+
+## Responsibility
+Wires the MiniMax H3 joint text-to-video-and-audio (T2VA) and frame-to-video-audio (FL2VA) model into the DiffusionNFT algorithm (`algorithm="diffusion_nft"`). Because H3 is not a stock diffusers pipeline, this pipeline owns the most machinery of any NFT pipeline: a packed video/audio/text latent layout, dual-velocity (video+audio) transformer forwarding, token-id-native prompting, and Diffusers→vLLM-Omni weight/LoRA translation.
+
+## Design
+- Registration: `MiniMaxH3DiffusionNFT` via `@DiffusionModelBase.register("MiniMaxH3Pipeline", algorithm="diffusion_nft")` (training side, `diffusers_training_adapter.py`); `MiniMaxH3DiffusionNFTPipeline` via `@VllmOmniPipelineBase.register("MiniMaxH3Pipeline", algorithm="diffusion_nft")` (rollout side, `vllm_omni_rollout_adapter.py`).
+- `common.py` holds the shared H3 layout math: `build_packed_sequence` / `build_layout_from_meta` (text tokens + keyframe condition rows + audio rows + video rows with 3-axis RoPE position ids), `build_row_timesteps` (per-row video/audio/condition timesteps), `pack_video_audio_rows` / `unpack_video_audio_rows` (flat packed latents, `VIDEO_ROW_WIDTH=96`, `AUDIO_ROW_WIDTH=32`), `split_dual_velocity`, `h3_dit_timestep` (σ·1000 → data-fraction), `h3_velocity_to_flow_match` (negation), `keyframe_indices_to_anchors` (FL2VA frame indices → `"first"/"last"` anchors), `prepare_h3_processor_files` (injects `model_type: qwen3_vl` processor config).
+- `MiniMaxH3RolloutWeightSyncMixin` (in `common.py`) bridges Diffusers weights to fused vLLM-Omni layout: `_diffusers_to_vllm_name` renames, `load_weights` fuses QKV/FC1 and inserts the `rope.inv_freq` table, `map_lora_update_to_engine` + `validate_lora_target_modules` (sync-safe LoRA whitelist), `encode_prompt`/`_ensure_prompt_text` implement token-id-native prompting guarded by `MINIMAX_H3_TOKEN_ID_NATIVE_KEY`.
+- `agent_loop.py` registers `MiniMaxH3DiffusionSingleTurnAgentLoop` (`@register("minimax_h3_diffusion_single_turn_agent")`) extending `verl_omni.agent_loop.single_turn_agent_loop.DiffusionSingleTurnAgentLoop`; it tokenizes raw text verbatim (`_tokenize_raw_text`, no chat template) and overrides `ct_build_initial_tokens`/`apply_chat_template`.
+- Forward-process only: `forward_and_sample_previous_step` raises `NotImplementedError` — no reverse-SDE (flow_grpo) sampling here.
+
+## Flow
+1. Example entry: `python3 -m verl_omni.trainer.main_diffusion` (e.g. `examples/diffusionnft_trainer/minimax_h3/run_minimax_h3_t2va_lora.sh`) with `actor_rollout_ref.actor.diffusion_loss.loss_mode=diffusion_nft`.
+2. Rollout: agent loop marks sampling params token-id-native → `MiniMaxH3DiffusionNFTPipeline._ensure_prompt_text` validates and exposes `_h3_prompt_ids` → `diffuse()` runs the upstream T2VA/FL2VA denoiser and captures `_nft_capture` (video/audio latents, `condition_video_rows` via `minimax_h3_imgvid_cond_noise_aug_rows`, text embeddings/tags, latent dims) → `forward()` patchifies (`minimax_h3_patchify_video_latent`, `minimax_h3_pack_audio_latent`), packs `latents_clean`, builds `latent_meta` and the sigma-shifted `train_timesteps` pool (`_build_train_timesteps` via `minimax_h3_time_shift_sigmas`), and attaches everything with `with_rollout_data`.
+3. Reward: `reward.reward_functions.*` (e.g. CLAP + ImageBind via `MultiVisualRewardManager`, `verl_omni.reward_loop.reward_manager`) score generations; `DiffusionNFTLoss` (`trainer/diffusion/diffusion_algos.py`) converts advantages → `reward_prob`.
+4. Training: `MiniMaxH3DiffusionNFT.prepare_model_inputs` unpacks `latent_meta`, rebuilds the layout, and `forward()` runs the H3 transformer per sample with dual-stream timesteps; velocities are sign-flipped and re-packed for the NFT loss.
+
+## Integration
+- Consumed by: `verl_omni/pipelines/__init__.py` (star import), `verl_omni/agent_loop/__init__.py` (registers the agent loop), `main_diffusion.py` → `DirectPreferenceRayTrainer`.
+- Depends on: `verl_omni.pipelines.model_base` (`DiffusionModelBase`, `VllmOmniPipelineBase`), `verl_omni.pipelines.diffusion_rollout_output.with_rollout_data`, vLLM-Omni `vllm_omni.diffusion.models.minimax_h3.*` (`MiniMaxH3Pipeline`, packed_tokens, denoise_loop, condition_noise, time_request).
+- Key entry points: `MiniMaxH3DiffusionNFT`, `MiniMaxH3DiffusionNFTPipeline`, `MiniMaxH3RolloutWeightSyncMixin`, `MiniMaxH3DiffusionSingleTurnAgentLoop`, `common.py` layout builders.
+- Differences from GRPO-family siblings: joint audio+video packed sequence, no reverse-SDE/logprob collection (final clean latent only), custom agent loop, and bespoke weight/LoRA sync to the fused vLLM H3 layout.

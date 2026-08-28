@@ -100,6 +100,17 @@ change and explain why**.
   [`docs/contributing/editing-agent-instructions.md`](docs/contributing/editing-agent-instructions.md)
   — Rules for modifying AGENTS.md or any domain-specific guide it references.
 
+## Repository Map
+
+A full codemap is available at `codemap.md` in the project root.
+
+Before working on any task, read `codemap.md` to understand:
+- Project architecture and entry points
+- Directory responsibilities and design patterns
+- Data flow and integration points between modules
+
+For deep work on a specific folder, also read that folder's `codemap.md`.
+
 ## Acknowledgements
 
 Adapted from the [verl project](https://github.com/verl-project/verl)'s [`AGENTS.md`](https://github.com/verl-project/verl/blob/main/AGENTS.md), which was itself adapted from the [vLLM project](https://github.com/vllm-project/vllm).
